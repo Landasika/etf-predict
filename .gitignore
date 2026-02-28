@@ -1,0 +1,59 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 数据库文件
+data/*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.deleted
+
+# 日志文件
+*.log
+
+# 测试覆盖率
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 权重文件（可选）
+optimized_weights/*.json
+weights_*.json
+main_factors_weights*.json
+
+# 临时文件
+*.tmp
+temp/
+tmp/

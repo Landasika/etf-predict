@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETF策略回测 - 自选管理</title>
+    <link rel="stylesheet" href="/static/css/macd_watchlist.css?v=53">
+    <script src="/static/js/echarts.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <div class="header-top">
+                <h1 class="app-title">ETF策略回测系统</h1>
+                <div class="data-date-info">
+                    <span class="date-label">📅 最新数据日期：</span>
+                    <span id="latestDataDate" class="date-value">请选择ETF</span>
+                </div>
+            </div>
+            <nav class="nav-links">
+                <a href="/">策略汇总</a>
+                <span class="current-page">详细策略</span>
+                <a href="/settings">⚙️ 系统设置</a>
+            </nav>
+        </header>
+
+        <div class="main-container">
+            <!-- 左侧标签栏 -->
+            <aside class="watchlist-sidebar">
+                <div class="sidebar-header">
+                    <h3>自选ETF</h3>
+                    <button id="addEtfBtn" class="add-btn" title="添加ETF到自选">+ 添加</button>
+                </div>
+
+                <!-- 搜索框 -->
+                <div class="sidebar-search">
+                    <input type="text" id="searchInput" class="search-input" placeholder="搜索ETF代码或名称...">
+                    <button id="clearSearchBtn" class="clear-search-btn" style="display: none;">×</button>
+                </div>
+
+                <div id="watchlistContainer" class="etf-list">
+                    <!-- 动态生成 -->
+                    <div class="loading">加载中...</div>
+                </div>
+            </aside>
+
+            <!-- 右侧内容区 -->
+            <main class="content-area">
+                <!-- 策略选择器 -->
+                <section class="strategy-selector" id="strategySelector" style="display: none;">
+                    <div class="strategy-selector-left">
+                        <label>当前策略：</label>
+                        <select id="strategySelect">
+                            <option value="macd_aggressive">MACD激进策略</option>
+                            <option value="macd_kdj_discrete">MACD+KDJ离散仓位系统2.0</option>
+                            <option value="rsi_macd_kdj_triple">RSI+MACD+KDJ三指标共振策略</option>
+                            <option value="pure_rsi">纯RSI 0-10仓策略</option>
+                            <option value="rsi_triple_lines">RSI三线金叉死叉策略</option>
+                        </select>
+                        <button id="updateStrategyBtn" class="btn-update">更新策略</button>
+                        <span id="strategyStatus" class="strategy-status"></span>
+                    </div>
+                    <!-- MACD激进策略时显示参数优化按钮 -->
+                    <div class="strategy-selector-right" id="macdParamsSection" style="display: none;">
+                        <div class="current-params-display">
+                            <span class="params-label">当前参数:</span>
+                            <span class="params-value" id="currentParamsDisplay">Fast:8 Slow:17 Signal:5</span>
+                        </div>
+                        <button id="optimizeParamsBtn" class="btn-optimize-new" title="优化MACD参数以最大化近一年收益率">
+                            <span class="btn-icon">⚡</span>
+                            <span class="btn-text">优化参数</span>
+                        </button>
+                        <button id="resetParamsBtn" class="btn-reset-params" title="恢复默认MACD参数" style="display: none;">
+                            <span class="btn-icon">↺</span>
+                            <span class="btn-text">恢复默认</span>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 参数优化结果面板 -->
+                <section class="optimization-result-panel" id="optimizationResultPanel" style="display: none;">
+                    <h4>📊 参数优化完成</h4>
+                    <div class="opt-params-grid">
+                        <div class="opt-param-item">
+                            <label>MACD Fast</label>
+                            <span id="optMacdFast" class="opt-value">--</span>
+                        </div>
+                        <div class="opt-param-item">
+                            <label>MACD Slow</label>
+                            <span id="optMacdSlow" class="opt-value">--</span>
+                        </div>
+                        <div class="opt-param-item">
+                            <label>MACD Signal</label>
+                            <span id="optMacdSignal" class="opt-value">--</span>
+                        </div>
+                    </div>
+                    <div class="opt-params-grid" id="optKdjParamsGrid" style="display: none;">
+                        <div class="opt-param-item">
+                            <label>KDJ N</label>
+                            <span id="optKdjN" class="opt-value">--</span>
+                        </div>
+                        <div class="opt-param-item">
+                            <label>KDJ M1</label>
+                            <span id="optKdjM1" class="opt-value">--</span>
+                        </div>
+                        <div class="opt-param-item">
+                            <label>KDJ M2</label>
+                            <span id="optKdjM2" class="opt-value">--</span>
+                        </div>
+                    </div>
+                    <div class="opt-metrics">
+                        <div class="opt-metric">
+                            <label>近一年收益率</label>
+                            <span id="optReturn" class="opt-highlight">--%</span>
+                        </div>
+                        <div class="opt-metric">
+                            <label>夏普比率</label>
+                            <span id="optSharpe">--</span>
+                        </div>
+                        <div class="opt-metric">
+                            <label>最大回撤</label>
+                            <span id="optDrawdown">--%</span>
+                        </div>
+                    </div>
+                    <div class="opt-info">
+                        <span id="optPeriod" class="opt-period-text">--</span>
+                        <span id="optTrades" class="opt-trades-text">--</span>
+                    </div>
+                    <div class="opt-actions">
+                        <button id="closeOptPanelBtn" class="btn-close">关闭</button>
+                    </div>
+                </section>
+
+                <!-- 实时数据卡片 -->
+                <section class="realtime-card" id="realtimeCard" style="display: none;">
+                    <div class="card-item">
+                        <label class="card-label">近一年收益率</label>
+                        <div class="value-group">
+                            <span id="profitValue" class="card-value">¥0.00</span>
+                            <span id="profitPct" class="card-pct">(0.00%)</span>
+                        </div>
+                    </div>
+                    <div class="card-item">
+                        <label class="card-label">当前仓位</label>
+                        <span id="positionsUsed" class="card-value positions-large">0/10</span>
+                    </div>
+                    <div class="card-item">
+                        <label class="card-label">下个交易日操作</label>
+                        <span id="nextAction" class="card-action">--</span>
+                    </div>
+                    <!-- 收益计算依据 -->
+                    <div class="card-item-full" id="profitInfo" style="grid-column: 1 / -1; padding-top: 12px; border-top: 1px solid #eee; margin-top: 8px;">
+                        <label class="card-label" style="font-size: 12px; color: #999;">收益计算</label>
+                        <span id="profitBasis" class="card-basis" style="font-size: 12px; color: #666;">使用全部数据，初始资金¥2000</span>
+                    </div>
+                </section>
+
+                <!-- 空状态提示 -->
+                <div id="emptyState" class="empty-state">
+                    <div class="empty-icon">📊</div>
+                    <h3>请选择一个ETF查看详情</h3>
+                    <p>从左侧列表选择ETF，或添加新的ETF到自选</p>
+                </div>
+
+                <!-- 回测图表 -->
+                <section class="chart-section" id="chartSection" style="display: none;">
+                    <div class="section-header">
+                        <h3>策略回测图表</h3>
+                        <div class="legend">
+                            <span class="legend-item"><span class="legend-color price-line-new"></span> 股票价格</span>
+                            <span class="legend-item"><span class="legend-color strategy-line-new"></span> 策略收益率</span>
+                            <span class="legend-item"><span class="legend-color buy-point"></span> 买入</span>
+                            <span class="legend-item"><span class="legend-color sell-point"></span> 卖出</span>
+                        </div>
+                    </div>
+                    <div id="backtestChart" class="chart-container"></div>
+                </section>
+
+                <!-- K线图表 -->
+                <section class="chart-section" id="klineChartSection" style="display: none;">
+                    <div class="section-header">
+                        <h3>K线分析图表</h3>
+                        <div class="kline-controls">
+                            <label for="klinePeriod">周期:</label>
+                            <select id="klinePeriod">
+                                <option value="daily">日K</option>
+                                <option value="weekly">周K</option>
+                                <option value="monthly">月K</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="klineChart" class="kline-chart-container"></div>
+                </section>
+
+                <!-- 仓位历史图表 -->
+                <section class="chart-section" id="positionHistorySection" style="display: none;">
+                    <div class="section-header">
+                        <h3>仓位变化历史</h3>
+                    </div>
+                    <div id="positionHistoryChart" class="chart-container"></div>
+                </section>
+
+                <!-- 指标面板 -->
+                <section class="details-section" id="detailsSection" style="display: none;">
+                    <!-- MACD指标面板 -->
+                    <div class="macd-panel" id="macdPanel" style="display: none;">
+                        <h4>MACD指标</h4>
+                        <div class="macd-item">
+                            <span class="macd-label">DIF</span>
+                            <span class="macd-value" id="macdDif">0.0000</span>
+                        </div>
+                        <div class="macd-item">
+                            <span class="macd-label">DEA</span>
+                            <span class="macd-value" id="macdDea">0.0000</span>
+                        </div>
+                        <div class="macd-item">
+                            <span class="macd-label">HIST</span>
+                            <span class="macd-value" id="macdHist">0.0000</span>
+                        </div>
+                        <div class="macd-item">
+                            <span class="macd-label">信号强度</span>
+                            <span class="macd-strength" id="signalStrength">0</span>
+                        </div>
+                        <div class="macd-item">
+                            <span class="macd-label">信号类型</span>
+                            <span class="macd-type" id="signalType">HOLD</span>
+                        </div>
+                    </div>
+
+                    <!-- RSI+MACD+KDJ三指标面板 -->
+                    <div class="triple-indicator-panel" id="tripleIndicatorPanel" style="display: none;">
+                        <h4>三指标共振状态（重构版）</h4>
+                        <div class="indicator-row">
+                            <div class="indicator-item">
+                                <span class="indicator-label">趋势铁律</span>
+                                <span class="indicator-value" id="trendType">--</span>
+                                <span class="indicator-status" id="trendStatus">--</span>
+                            </div>
+                        </div>
+                        <div class="indicator-row">
+                            <div class="indicator-item">
+                                <span class="indicator-label">MA20/MA60</span>
+                                <span class="indicator-value" id="maValue">--</span>
+                            </div>
+                        </div>
+                        <div class="indicator-row">
+                            <div class="indicator-item">
+                                <span class="indicator-label">MACD零轴</span>
+                                <span class="indicator-value" id="macdZeroStatus">--</span>
+                                <span class="indicator-status" id="macdZeroTrend">--</span>
+                            </div>
+                        </div>
+                        <div class="indicator-row">
+                            <div class="indicator-item">
+                                <span class="indicator-label">RSI(14)</span>
+                                <span class="indicator-value" id="rsiValue">--</span>
+                                <span class="indicator-status" id="rsiStatus">--</span>
+                            </div>
+                        </div>
+                        <div class="indicator-row">
+                            <div class="indicator-item">
+                                <span class="indicator-label">KDJ(14,3,3)</span>
+                                <span class="indicator-value" id="kdjValue">K:-- D:-- J:--</span>
+                                <span class="indicator-status" id="kdjStatus">--</span>
+                            </div>
+                        </div>
+                        <div class="indicator-row" style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+                            <div class="indicator-item-full">
+                                <span class="position-label">当前仓位</span>
+                                <span class="position-value" id="currentPosition">0/8成</span>
+                            </div>
+                        </div>
+                        <div class="indicator-row">
+                            <div class="indicator-item-full">
+                                <span class="signal-reason-label">信号说明</span>
+                                <span class="signal-reason-value" id="signalReason">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- RSI指标面板（纯RSI策略专用） -->
+                    <div class="rsi-indicators-panel" id="rsiIndicatorsPanel" style="display: none;">
+                        <h4>RSI(9)指标</h4>
+                        <div class="indicators-grid">
+                            <div class="indicator-item">
+                                <label>RSI数值</label>
+                                <span id="rsiPureValue" class="indicator-value">--</span>
+                            </div>
+                            <div class="indicator-item">
+                                <label>RSI区间</label>
+                                <span id="rsiPureZone" class="indicator-value indicator-zone">--</span>
+                            </div>
+                            <div class="indicator-item">
+                                <label>RSI方向</label>
+                                <span id="rsiPureDirection" class="indicator-value indicator-direction">--</span>
+                            </div>
+                            <div class="indicator-item">
+                                <label>连续向上天数</label>
+                                <span id="rsiPureConsecutiveUp" class="indicator-value">--</span>
+                            </div>
+                            <div class="indicator-item">
+                                <label>RSI状态</label>
+                                <span id="rsiPureStatus" class="indicator-value indicator-status">--</span>
+                            </div>
+                            <div class="indicator-item-full">
+                                <label>仓位说明</label>
+                                <span id="rsiPurePositionReason" class="reason-value">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 权重配置面板 -->
+                    <div class="weights-panel" id="weightsPanel" style="display: none;">
+                        <h4>权重配置</h4>
+                        <div class="weight-item">
+                            <span class="weight-label">MACD</span>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="macdWeightBar"></div>
+                            </div>
+                            <span class="weight-value" id="macdWeightValue">0%</span>
+                        </div>
+                        <div class="weight-item">
+                            <span class="weight-label">KDJ</span>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="kdjWeightBar"></div>
+                            </div>
+                            <span class="weight-value" id="kdjWeightValue">0%</span>
+                        </div>
+                        <div class="weight-item">
+                            <span class="weight-label">BOLL</span>
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="bollWeightBar"></div>
+                            </div>
+                            <span class="weight-value" id="bollWeightValue">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- 回测指标 -->
+                    <div class="metrics-panel">
+                        <h4>回测指标</h4>
+                        <div class="metric-grid">
+                            <div class="metric-item">
+                                <label>总收益率</label>
+                                <span id="totalReturn" class="metric-value">--</span>
+                            </div>
+                            <div class="metric-item">
+                                <label>基准收益率</label>
+                                <span id="benchmarkReturn" class="metric-value">--</span>
+                            </div>
+                            <div class="metric-item">
+                                <label>交易次数</label>
+                                <span id="tradeCount" class="metric-value">--</span>
+                            </div>
+                            <div class="metric-item">
+                                <label>胜率</label>
+                                <span id="winRate" class="metric-value">--</span>
+                            </div>
+                            <div class="metric-item">
+                                <label>最大回撤</label>
+                                <span id="maxDrawdown" class="metric-value">--</span>
+                            </div>
+                            <div class="metric-item">
+                                <label>夏普比率</label>
+                                <span id="sharpeRatio" class="metric-value">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 交易记录 -->
+                    <div class="trades-panel">
+                        <h4>最近交易</h4>
+                        <div class="trades-list" id="tradesList">
+                            <p class="no-trades">暂无交易记录</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 高级设置 - 固定在底部 -->
+                <section class="advanced-settings bottom-settings" id="advancedSettings" style="display: none;">
+                    <h4 class="settings-title">⚙️ 策略设置</h4>
+                    <div class="settings-info" style="margin-bottom: 16px; padding: 12px; background: #f0f4ff; border-radius: 8px; border-left: 3px solid #667eea;">
+                        <p style="margin: 0; font-size: 13px; color: #666;">
+                            💡 <strong>提示</strong>：设置建仓日期后，该日期之前的数据仅用于策略学习，收益计算从建仓日期开始。
+                            如不设置建仓日期，则使用全部数据计算收益。
+                        </p>
+                    </div>
+                    <div class="settings-grid">
+                        <div class="setting-item">
+                            <label>初始资金</label>
+                            <div class="setting-item-row">
+                                <input type="number" id="initialCapital" class="setting-input" min="1000" max="1000000" step="1000" value="2000">
+                            </div>
+                            <span class="setting-hint">策略起始资金（单位：元）</span>
+                        </div>
+                        <div class="setting-item">
+                            <label>总仓位数</label>
+                            <div class="setting-item-row">
+                                <input type="number" id="totalPositions" class="setting-input" min="1" max="50" value="10">
+                            </div>
+                            <span class="setting-hint">每次买入按总资金/N分配</span>
+                        </div>
+                        <div class="setting-item">
+                            <label>建仓日期 <span style="font-weight: 400; color: #999;">(可选)</span></label>
+                            <div class="setting-item-row">
+                                <input type="date" id="buildPositionDate" class="setting-input" placeholder="不设置则使用全部数据">
+                            </div>
+                            <span class="setting-hint">此前数据用于学习，此后开始正式交易计算收益</span>
+                        </div>
+                        <div class="setting-action">
+                            <button id="saveSettingsBtn" class="btn-save">💾 保存设置</button>
+                            <span id="settingsStatus" class="settings-status"></span>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- 添加ETF弹窗 -->
+    <div id="addEtfModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>添加ETF到自选</h3>
+                <button id="closeModalBtn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>ETF代码：</label>
+                    <input type="text" id="etfCodeInput" class="search-input" placeholder="输入ETF代码，如510330.SH">
+                </div>
+                <div class="form-group">
+                    <label>选择策略：</label>
+                    <select id="addStrategySelect">
+                        <option value="macd_aggressive">MACD激进策略</option>
+                        <option value="macd_kdj_discrete">MACD+KDJ离散仓位系统2.0</option>
+                        <option value="rsi_macd_kdj_triple">RSI+MACD+KDJ三指标共振策略</option>
+                    </select>
+                </div>
+                <div class="modal-note" id="addModalNote">
+                    <p>💡 提示：MACD激进策略无需额外文件，可直接使用</p>
+                </div>
+                <div class="strategy-note" style="margin-top: 10px; padding: 10px; background: #f0fdf4; border-left: 3px solid #10b981; display: none;" id="strategyNote_macd_kdj_discrete">
+                    <strong>策略说明：</strong>
+                    <ul style="margin: 5px 0 0 20px;">
+                        <li>MACD判断趋势方向（BULL做多，BEAR空仓）</li>
+                        <li>KDJ确定0-10成离散仓位</li>
+                        <li>T日计算信号，T+1日执行</li>
+                        <li>仓位严格离散化：0/1/3/4/5/6/7/8/10成</li>
+                    </ul>
+                </div>
+                <button id="confirmAddBtn" class="btn btn-primary">确认添加</button>
+                <button id="cancelAddBtn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/macd_watchlist.js?v=59"></script>
+</body>
+</html>

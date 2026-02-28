@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ETF策略汇总 - ETF预测系统</title>
+    <link rel="stylesheet" href="/static/css/home.css?v=4">
+    <script src="/static/js/echarts.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1 class="app-title">ETF策略汇总</h1>
+            <div class="header-stats">
+                <div class="stat-item">
+                    <span class="stat-label">自选数量</span>
+                    <span id="totalCount" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">买入信号</span>
+                    <span id="buyCount" class="stat-value buy">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">卖出信号</span>
+                    <span id="sellCount" class="stat-value sell">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">持有</span>
+                    <span id="holdCount" class="stat-value hold">0</span>
+                </div>
+                <div class="stat-item data-date-stat">
+                    <span class="stat-label">📅 数据日期</span>
+                    <span id="dataDate" class="stat-value">--</span>
+                </div>
+            </div>
+            <nav class="nav-links">
+                <span class="current-page">策略汇总</span>
+                <a href="/macd-watchlist">详细策略</a>
+                <a href="/settings">⚙️ 系统设置</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <!-- 操作栏 -->
+            <section class="action-bar">
+                <button id="refreshBtn" class="btn btn-primary">
+                    <span class="btn-icon">🔄</span> 刷新页面
+                </button>
+                <button id="updateDataBtn" class="btn btn-success">
+                    <span class="btn-icon">📥</span> 立即更新数据
+                </button>
+                <button id="showAdviceBtn" class="btn btn-advice">
+                    <span class="btn-icon">💡</span> 操作建议
+                </button>
+                <button id="optimizeAllBtn" class="btn btn-optimize-all">
+                    <span class="btn-icon">⚡</span> 一键优化所有参数
+                </button>
+                <button id="schedulerSettingsBtn" class="btn btn-scheduler">
+                    <span class="btn-icon">⏰</span> 定时设置
+                </button>
+
+                <!-- 实时监控控制 -->
+                <div class="realtime-control">
+                    <button id="toggleRealtimeBtn" class="btn btn-realtime">
+                        <span class="btn-icon">🔴</span> <span id="realtimeBtnText">启用实时监控</span>
+                    </button>
+                    <button id="realtimeSettingsBtn" class="btn btn-secondary" title="监控时间设置">
+                        <span class="btn-icon">⚙️</span>
+                    </button>
+                    <div id="realtimeStatus" class="realtime-status" style="display: none;">
+                        <span class="status-indicator"></span>
+                        <span id="realtimeStatusText">监控中</span>
+                        <span id="realtimeLastUpdate">--:--:--</span>
+                    </div>
+                </div>
+
+                <button id="addEtfBtn" class="btn btn-secondary">
+                    <span class="btn-icon">➕</span> 添加ETF
+                </button>
+                <div class="last-updated">
+                    页面更新：<span id="lastUpdated">--</span>
+                </div>
+            </section>
+
+            <!-- 今日收益面板 -->
+            <section class="daily-profit-panel" id="dailyProfitPanel" style="display: none;">
+                <h3 class="panel-title">💰 今日收益 <small style="font-size: 13px; font-weight: 400; color: #166534;">(基于昨日持仓)</small></h3>
+                <div class="daily-profit-content">
+                    <div class="daily-profit-stats">
+                        <div class="daily-profit-stat-item">
+                            <span class="stat-label">昨日总仓位</span>
+                            <span id="yesterdayTotalPositions" class="stat-value">0仓</span>
+                        </div>
+                        <div class="daily-profit-stat-item">
+                            <span class="stat-label">昨日总资金</span>
+                            <span id="yesterdayTotalInvestment" class="stat-value">¥0</span>
+                        </div>
+                    </div>
+                    <div class="daily-profit-total">
+                        <span class="daily-profit-label">今日总收益</span>
+                        <span id="dailyProfitTotal" class="daily-profit-value">¥0.00</span>
+                        <span id="dailyProfitPct" class="daily-profit-pct">(0.00%)</span>
+                    </div>
+                    <div class="daily-profit-details" id="dailyProfitDetails">
+                        <!-- 动态生成 -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- 定时更新状态 -->
+            <section id="schedulerStatusBanner" class="scheduler-status-banner" style="display: none;">
+                <div class="scheduler-info">
+                    <span class="scheduler-icon">⏰</span>
+                    <span class="scheduler-text" id="schedulerStatusText">定时任务已启用</span>
+                    <span class="scheduler-next-run" id="schedulerNextRun"></span>
+                </div>
+            </section>
+
+            <!-- 数据更新进度面板 -->
+            <section id="dataUpdateProgressPanel" class="data-update-progress-panel" style="display: none;">
+                <h3>📥 数据更新进度</h3>
+                <div class="update-progress-content">
+                    <div class="progress-bar-container">
+                        <div id="dataUpdateProgressBar" class="progress-bar-fill"></div>
+                    </div>
+                    <div class="update-status-text" id="dataUpdateStatusText">正在准备...</div>
+                </div>
+            </section>
+
+            <!-- 优化进度面板 -->
+            <section id="optimizeProgressPanel" class="optimize-progress-panel" style="display: none;">
+                <h3>⚡ 批量优化进度</h3>
+                <div class="progress-stats">
+                    <div class="progress-stat">
+                        <span class="stat-label">总数</span>
+                        <span id="optTotalCount" class="stat-value">0</span>
+                    </div>
+                    <div class="progress-stat">
+                        <span class="stat-label">已完成</span>
+                        <span id="optCompletedCount" class="stat-value completed">0</span>
+                    </div>
+                    <div class="progress-stat">
+                        <span class="stat-label">失败</span>
+                        <span id="optFailedCount" class="stat-value failed">0</span>
+                    </div>
+                </div>
+                <div class="progress-bar-container">
+                    <div id="optProgressBar" class="progress-bar"></div>
+                </div>
+                <div class="progress-log" id="optProgressLog"></div>
+            </section>
+
+            <!-- 定时设置弹窗 -->
+            <div id="schedulerSettingsModal" class="modal">
+                <div class="modal-content scheduler-modal">
+                    <div class="modal-header">
+                        <h3>⏰ 定时更新设置</h3>
+                        <button id="closeSchedulerModalBtn" class="close-btn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="schedulerEnabled">
+                                启用定时更新
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="schedulerTime">更新时间（每个交易日）</label>
+                            <input type="time" id="schedulerTime" class="time-input" value="15:05">
+                        </div>
+                        <div class="scheduler-current-status">
+                            <strong>当前状态：</strong>
+                            <span id="schedulerCurrentStatus">未启用</span>
+                        </div>
+                        <div class="scheduler-next-run-info">
+                            <strong>下次运行：</strong>
+                            <span id="schedulerNextRunInfo">--</span>
+                        </div>
+                        <div class="modal-actions">
+                            <button id="saveSchedulerSettingsBtn" class="btn btn-primary">保存设置</button>
+                            <button id="cancelSchedulerSettingsBtn" class="btn btn-secondary">取消</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 实时监控设置弹窗 -->
+            <div id="realtimeSettingsModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>⏰ 实时监控设置</h3>
+                        <button id="closeRealtimeModalBtn" class="close-btn">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label>监控时间段</label>
+                            <div class="time-range-inputs">
+                                <div>
+                                    <label for="realtimeStartTime">开始时间</label>
+                                    <input type="time" id="realtimeStartTime" class="time-input" value="09:25">
+                                </div>
+                                <div>
+                                    <label for="realtimeEndTime">结束时间</label>
+                                    <input type="time" id="realtimeEndTime" class="time-input" value="15:05">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>更新频率（秒）</label>
+                            <select id="realtimeInterval" class="select-input">
+                                <option value="30">30秒</option>
+                                <option value="60" selected>60秒</option>
+                                <option value="120">2分钟</option>
+                                <option value="300">5分钟</option>
+                            </select>
+                        </div>
+                        <div class="form-info">
+                            <strong>💡 说明：</strong>
+                            <ul>
+                                <li>监控时间段内，系统每分钟自动获取最新数据</li>
+                                <li>只计算当天最新信号，不会重复计算历史数据</li>
+                                <li>周末和节假日自动暂停监控</li>
+                                <li>ETF列表从自选中动态读取，支持随时添加删除</li>
+                            </ul>
+                        </div>
+                        <div class="modal-actions">
+                            <button id="saveRealtimeSettingsBtn" class="btn btn-primary">保存设置</button>
+                            <button id="cancelRealtimeSettingsBtn" class="btn btn-secondary">取消</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 策略表格 -->
+            <section class="strategy-table-section">
+                <h2 class="section-title">策略汇总</h2>
+                <div class="table-container">
+                    <table class="strategy-table" id="strategyTable">
+                        <thead>
+                            <tr>
+                                <th>ETF代码</th>
+                                <th>ETF名称</th>
+                                <th>策略</th>
+                                <th>MACD参数</th>
+                                <th>当前信号</th>
+                                <th>下个交易日操作</th>
+                                <th>近一年策略收益率</th>
+                                <th>近一年股票涨幅率</th>
+                                <th>持仓</th>
+                                <th>当日涨幅</th>
+                                <th>因子</th>
+                                <th>数据更新日期</th>
+                                <th>备注</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="strategyTableBody">
+                            <tr class="loading-row">
+                                <td colspan="14" class="loading-cell">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- 添加ETF弹窗 -->
+    <div id="addEtfModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>添加ETF到自选</h3>
+                <button id="closeModalBtn" class="close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>ETF代码：</label>
+                    <input type="text" id="etfCodeInput" class="search-input" placeholder="输入ETF代码，如510330.SH">
+                </div>
+                <div class="form-group">
+                    <label>选择策略：</label>
+                    <select id="addStrategySelect">
+                        <option value="macd_aggressive">MACD激进策略</option>
+                        <option value="macd_kdj_discrete">MACD+KDJ离散仓位系统2.0</option>
+                    </select>
+                </div>
+                <button id="confirmAddBtn" class="btn btn-primary">确认添加</button>
+                <button id="cancelAddBtn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作建议模态框 -->
+    <div id="adviceModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💡 当前操作建议</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="adviceContent">
+                    <div class="loading">正在加载建议...</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary close-modal">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/home.js?v=72"></script>
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系统设置 - ETF预测系统</title>
+    <link rel="stylesheet" href="/static/css/settings.css">
+</head>
+<body>
+    <div class="settings-container">
+        <header class="settings-header">
+            <h1>⚙️ 系统设置</h1>
+            <a href="/" class="back-btn">← 返回首页</a>
+        </header>
+
+        <main class="settings-content">
+            <!-- API Token 设置 -->
+            <section class="setting-section">
+                <h2>🔑 API Token 配置</h2>
+                <div class="setting-item">
+                    <label class="setting-label">
+                        Tushare Token
+                        <span class="setting-desc">用于历史数据下载</span>
+                    </label>
+                    <div class="setting-input-group">
+                        <input type="password" id="tushareToken" class="setting-input" placeholder="输入Tushare Token">
+                        <button class="btn btn-secondary" onclick="testToken('tushare')">测试连接</button>
+                    </div>
+                    <div class="setting-hint">
+                        <a href="https://tushare.pro/register" target="_blank">获取Token</a>
+                        &nbsp;|&nbsp;
+                        <a href="https://tushare.pro/document/2?doc_id=127" target="_blank">文档</a>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">
+                        Minishare Token
+                        <span class="setting-desc">用于实时数据获取</span>
+                    </label>
+                    <div class="setting-input-group">
+                        <input type="password" id="minishareToken" class="setting-input" placeholder="Minishare Token（已配置）">
+                        <span class="setting-status">✓ 已配置</span>
+                    </div>
+                    <div class="setting-hint">
+                        <a href="https://minishare.com" target="_blank">获取Token</a>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 数据源设置 -->
+            <section class="setting-section">
+                <h2>📊 数据源配置</h2>
+
+                <div class="setting-item">
+                    <label class="setting-label">数据源优先级</label>
+                    <div class="priority-selector">
+                        <div class="priority-item" data-source="minishare">
+                            <input type="checkbox" id="priority_minishare" checked>
+                            <label for="priority_minishare">1️⃣ Minishare（实时数据）</label>
+                            <span class="source-desc">rt_etf_k_ms接口，实时性高，数据最新</span>
+                        </div>
+                        <div class="priority-item" data-source="tushare">
+                            <input type="checkbox" id="priority_tushare" checked>
+                            <label for="priority_tushare">2️⃣ Tushare（历史数据）</label>
+                            <span class="source-desc">fund_daily接口，数据完整，历史超过10年</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="data-source-status">
+                    <h3>当前数据源状态</h3>
+                    <div id="dataSourceStatus" class="status-box">
+                        <div class="loading">加载中...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 更新调度设置 -->
+            <section class="setting-section">
+                <h2>🕐 自动更新设置</h2>
+
+                <div class="setting-item">
+                    <label class="setting-label">启用自动更新</label>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="autoUpdateEnabled" checked>
+                        <label for="autoUpdateEnabled" class="toggle"></label>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">更新时间</label>
+                    <input type="time" id="updateTime" class="setting-input" value="15:05">
+                    <span class="setting-hint">交易日收盘后自动更新数据</span>
+                </div>
+            </section>
+
+            <!-- 策略默认值 -->
+            <section class="setting-section">
+                <h2>📈 策略默认值</h2>
+                <div class="setting-item">
+                    <label class="setting-label">默认策略</label>
+                    <select id="defaultStrategy" class="setting-select">
+                        <option value="macd_aggressive">MACD激进策略</option>
+                    </select>
+                </div>
+                <div class="setting-item">
+                    <label class="setting-label">初始资金（元）</label>
+                    <input type="number" id="initialCapital" class="setting-input" value="2000" min="1000" step="100">
+                </div>
+                <div class="setting-item">
+                    <label class="setting-label">总仓位数量</label>
+                    <input type="number" id="totalPositions" class="setting-input" value="10" min="1" max="20">
+                </div>
+            </section>
+
+            <!-- 操作按钮 -->
+            <section class="action-buttons">
+                <button class="btn btn-secondary" onclick="loadSettings()">↺️ 重置</button>
+                <button class="btn btn-primary" onclick="saveSettings()">💾 保存设置</button>
+            </section>
+        </main>
+
+        <!-- 保存成功提示 -->
+        <div id="toast" class="toast hidden">
+            <span id="toastMessage">设置已保存</span>
+        </div>
+    </div>
+
+    <script src="/static/js/settings.js"></script>
+</body>
+</html>

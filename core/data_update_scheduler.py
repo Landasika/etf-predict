@@ -1,0 +1,309 @@
+"""
+数据更新调度器
+
+使用Python schedule库实现定时任务
+支持通过API动态配置和执行
+"""
+
+import schedule
+import time
+import threading
+import logging
+from datetime import datetime, timedelta
+from pathlib import Path
+import sys
+import os
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 配置日志
+LOG_DIR = Path(__file__).parent.parent / 'logs'
+LOG_DIR.mkdir(exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_DIR / 'data_update_scheduler.log', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
+
+class DataUpdateScheduler:
+    """数据更新调度器"""
+
+    def __init__(self):
+        self.is_running = False
+        self.scheduler_thread = None
+        self.update_time = "15:05"  # 默认更新时间
+        self.enabled = False  # 默认关闭
+        self.current_job = None
+        self.update_status = {
+            'is_updating': False,
+            'progress': 0,
+            'total': 0,
+            'current': '',
+            'success_count': 0,
+            'fail_count': 0,
+            'message': '',
+            'last_update': None,
+            'last_result': None
+        }
+
+        # 实时更新器
+        self.realtime_updater = None
+        self.realtime_enabled = False
+
+    def set_realtime_enabled(self, enabled: bool):
+        """启用/禁用实时更新
+
+        Args:
+            enabled: True启用，False禁用
+        """
+        self.realtime_enabled = enabled
+
+        if enabled:
+            from core.realtime_data_updater import RealtimeDataUpdater
+            if self.realtime_updater is None:
+                self.realtime_updater = RealtimeDataUpdater()
+            self.realtime_updater.start()
+            logger.info("✅ 实时更新已启用")
+        else:
+            if self.realtime_updater:
+                self.realtime_updater.stop()
+            logger.info("⏹️  实时更新已禁用")
+
+    def get_realtime_status(self) -> dict:
+        """获取实时更新状态"""
+        if self.realtime_updater:
+            status = self.realtime_updater.get_status()
+            status['enabled'] = self.realtime_enabled
+            return status
+        else:
+            return {
+                'enabled': self.realtime_enabled,
+                'is_running': False,
+                'start_time': '09:25',
+                'end_time': '15:05',
+                'update_interval': 60,
+                'update_status': {
+                    'is_updating': False,
+                    'last_update': None,
+                    'etf_count': 0,
+                    'success_count': 0,
+                    'fail_count': 0
+                }
+            }
+
+    def set_realtime_settings(self, start_time: str, end_time: str, update_interval: int) -> bool:
+        """设置实时更新参数
+
+        Args:
+            start_time: 开始时间 "HH:MM"
+            end_time: 结束时间 "HH:MM"
+            update_interval: 更新间隔（秒）
+
+        Returns:
+            bool: 是否设置成功
+        """
+        if self.realtime_updater:
+            # 设置时间范围
+            success = self.realtime_updater.set_time_range(start_time, end_time)
+            if success:
+                self.realtime_updater.update_interval = update_interval
+            return success
+        else:
+            logger.warning("实时更新器未初始化")
+            return False
+
+    def set_update_time(self, time_str):
+        """设置更新时间
+
+        Args:
+            time_str: 时间格式 "HH:MM"，如 "15:05"
+        """
+        try:
+            # 验证时间格式
+            datetime.strptime(time_str, '%H:%M')
+            self.update_time = time_str
+            logger.info(f"更新时间已设置为: {time_str}")
+
+            # 如果调度器正在运行，重新调度
+            if self.is_running:
+                self._reschedule()
+
+            return True
+        except ValueError:
+            logger.error(f"无效的时间格式: {time_str}")
+            return False
+
+    def set_enabled(self, enabled):
+        """启用/禁用调度器
+
+        Args:
+            enabled: True启用，False禁用
+        """
+        self.enabled = enabled
+        logger.info(f"调度器已{'启用' if enabled else '禁用'}")
+
+        if enabled and not self.is_running:
+            self.start()
+        elif not enabled and self.is_running:
+            self.stop()
+
+    def _run_update(self):
+        """执行更新任务"""
+        logger.info("=" * 60)
+        logger.info("🚀 开始执行定时更新任务")
+        logger.info("=" * 60)
+
+        self.update_status['is_updating'] = True
+        self.update_status['progress'] = 0
+        self.update_status['message'] = '正在更新数据...'
+
+        try:
+            from scripts.auto_update_data import run_auto_update
+
+            # 执行更新
+            success = run_auto_update(force=False)
+
+            self.update_status['last_update'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.update_status['last_result'] = '成功' if success else '部分失败'
+            self.update_status['message'] = '更新完成'
+
+            logger.info(f"✅ 定时更新任务完成: {self.update_status['last_result']}")
+
+        except Exception as e:
+            logger.error(f"❌ 定时更新任务失败: {e}")
+            self.update_status['last_result'] = '失败'
+            self.update_status['message'] = f'更新失败: {str(e)}'
+        finally:
+            self.update_status['is_updating'] = False
+
+    def _reschedule(self):
+        """重新调度任务"""
+        # 清除所有任务
+        schedule.clear()
+
+        # 如果启用，添加新任务
+        if self.enabled:
+            # 每个工作日执行
+            schedule.every().monday.at(self.update_time).do(self._run_update)
+            schedule.every().tuesday.at(self.update_time).do(self._run_update)
+            schedule.every().wednesday.at(self.update_time).do(self._run_update)
+            schedule.every().thursday.at(self.update_time).do(self._run_update)
+            schedule.every().friday.at(self.update_time).do(self._run_update)
+
+            logger.info(f"✅ 已调度更新任务: 每个工作日 {self.update_time}")
+
+    def _run_scheduler(self):
+        """调度器运行循环"""
+        logger.info("📅 调度器线程已启动")
+        self._reschedule()
+
+        while self.is_running:
+            schedule.run_pending()
+            time.sleep(60)  # 每分钟检查一次
+
+        logger.info("📅 调度器线程已停止")
+
+    def start(self):
+        """启动调度器"""
+        if self.is_running:
+            logger.warning("调度器已在运行")
+            return False
+
+        if not self.enabled:
+            logger.warning("调度器未启用")
+            return False
+
+        self.is_running = True
+        self.scheduler_thread = threading.Thread(target=self._run_scheduler, daemon=True)
+        self.scheduler_thread.start()
+        logger.info("✅ 调度器已启动")
+        return True
+
+    def stop(self):
+        """停止调度器"""
+        if not self.is_running:
+            logger.warning("调度器未运行")
+            return False
+
+        self.is_running = False
+        schedule.clear()
+
+        if self.scheduler_thread:
+            self.scheduler_thread.join(timeout=5)
+
+        logger.info("✅ 调度器已停止")
+        return True
+
+    def trigger_now(self):
+        """立即触发一次更新（在新线程中执行）"""
+        if self.update_status['is_updating']:
+            logger.warning("⚠️  更新任务正在进行中")
+            return False
+
+        logger.info("🚀 手动触发更新任务")
+
+        def run_in_thread():
+            self._run_update()
+
+        thread = threading.Thread(target=run_in_thread, daemon=True)
+        thread.start()
+
+        return True
+
+    def get_status(self):
+        """获取调度器状态"""
+        next_run = None
+        if self.enabled and self.is_running:
+            next_job = schedule.next_run()
+            if next_job:
+                next_run = next_job.strftime('%Y-%m-%d %H:%M:%S')
+
+        return {
+            'enabled': self.enabled,
+            'is_running': self.is_running,
+            'update_time': self.update_time,
+            'next_run': next_run,
+            'update_status': self.update_status.copy()
+        }
+
+
+# 全局调度器实例
+scheduler = DataUpdateScheduler()
+
+
+def get_scheduler():
+    """获取调度器实例"""
+    return scheduler
+
+
+if __name__ == '__main__':
+    # 测试代码
+    s = get_scheduler()
+
+    print("设置更新时间为 15:05...")
+    s.set_update_time("15:05")
+
+    print("启用调度器...")
+    s.set_enabled(True)
+
+    print("调度器状态:")
+    status = s.get_status()
+    print(f"  启用: {status['enabled']}")
+    print(f"  运行中: {status['is_running']}")
+    print(f"  更新时间: {status['update_time']}")
+    print(f"  下次运行: {status['next_run']}")
+
+    # 保持运行
+    try:
+        while True:
+            time.sleep(60)
+    except KeyboardInterrupt:
+        print("\n停止调度器...")
+        s.stop()

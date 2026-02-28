@@ -1,0 +1,539 @@
+{
+  "etfs": [
+    {
+      "code": "562360.SH",
+      "name": "机器人ETF",
+      "sector": "机器人",
+      "added_at": "2026-02-17",
+      "strategy": "rsi_triple_lines",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 20,
+        "macd_slow": 38,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "515790.SH",
+      "name": "光伏ETF",
+      "sector": "光伏",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 20,
+        "macd_slow": 33,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "159870.SZ",
+      "name": "化工ETF",
+      "sector": "化工",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 17,
+        "macd_slow": 29,
+        "macd_signal": 5
+      }
+    },
+    {
+      "code": "512980.SH",
+      "name": "传媒ETF",
+      "sector": "传媒",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 18,
+        "macd_slow": 37,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "515220.SH",
+      "name": "煤炭ETF",
+      "sector": "煤炭",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 12,
+        "macd_slow": 33,
+        "macd_signal": 10
+      }
+    },
+    {
+      "code": "159852.SZ",
+      "name": "软件ETF",
+      "sector": "软件",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 17,
+        "macd_slow": 35,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "518880.SH",
+      "name": "黄金ETF",
+      "sector": "黄金",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 18,
+        "macd_slow": 32,
+        "macd_signal": 7
+      }
+    },
+    {
+      "code": "159827.SZ",
+      "name": "农业ETF",
+      "sector": "农业",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 20,
+        "macd_slow": 38,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "159755.SZ",
+      "name": "电池ETF",
+      "sector": "电池",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 14,
+        "macd_slow": 32,
+        "macd_signal": 9
+      }
+    },
+    {
+      "code": "159206.SZ",
+      "name": "卫星ETF",
+      "sector": "卫星",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 11,
+        "macd_slow": 19,
+        "macd_signal": 5
+      }
+    },
+    {
+      "code": "159928.SZ",
+      "name": "消费ETF",
+      "sector": "消费",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 12,
+        "macd_slow": 28,
+        "macd_signal": 11
+      },
+      "optimized_params": {
+        "macd_fast": 14,
+        "macd_slow": 29,
+        "macd_signal": 11,
+        "kdj_n": 13,
+        "kdj_m1": 3,
+        "kdj_m2": 2
+      }
+    },
+    {
+      "code": "159997.SZ",
+      "name": "电子ETF",
+      "sector": "电子",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 15,
+        "macd_slow": 29,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "512760.SH",
+      "name": "芯片ETF",
+      "sector": "芯片",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 11,
+        "macd_slow": 23,
+        "macd_signal": 9
+      }
+    },
+    {
+      "code": "512480.SH",
+      "name": "半导体ETF",
+      "sector": "半导体",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 13,
+        "macd_slow": 29,
+        "macd_signal": 7
+      }
+    },
+    {
+      "code": "512660.SH",
+      "name": "军工ETF",
+      "sector": "军工",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 20,
+        "macd_slow": 38,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "512170.SH",
+      "name": "医疗ETF",
+      "sector": "医疗",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 20,
+        "macd_slow": 38,
+        "macd_signal": 7
+      }
+    },
+    {
+      "code": "159929.SZ",
+      "name": "医药ETF",
+      "sector": "医药",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 20,
+        "macd_slow": 38,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "515880.SH",
+      "name": "通信ETF",
+      "sector": "通信",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 12,
+        "macd_slow": 30,
+        "macd_signal": 6
+      }
+    },
+    {
+      "code": "512400.SH",
+      "name": "有色金属ETF",
+      "sector": "有色金属",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 17,
+        "macd_slow": 28,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "588000.SH",
+      "name": "科创50ETF",
+      "sector": "科创100",
+      "added_at": "2026-02-17",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000,
+      "optimized_macd_params": {
+        "macd_fast": 17,
+        "macd_slow": 40,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "159611.SZ",
+      "name": "电力ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 20,
+        "macd_slow": 33,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "515210.SH",
+      "name": "钢铁ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 19,
+        "macd_slow": 38,
+        "macd_signal": 9
+      }
+    },
+    {
+      "code": "512200.SH",
+      "name": "房地产ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 16,
+        "macd_slow": 28,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "516800.SH",
+      "name": "智能制造ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 9,
+        "macd_slow": 22,
+        "macd_signal": 6
+      }
+    },
+    {
+      "code": "515000.SH",
+      "name": "科技ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 17,
+        "macd_slow": 35,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "563380.SH",
+      "name": "航空航天ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 7,
+        "macd_slow": 20,
+        "macd_signal": 3
+      }
+    },
+    {
+      "code": "515030.SH",
+      "name": "新能源车ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 16,
+        "macd_slow": 30,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "512800.SH",
+      "name": "银行ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 14,
+        "macd_slow": 32,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "515700.SH",
+      "name": "新能车ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 15,
+        "macd_slow": 32,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "516950.SH",
+      "name": "基建ETF银华",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 17,
+        "macd_slow": 30,
+        "macd_signal": 9
+      }
+    },
+    {
+      "code": "159825.SZ",
+      "name": "农业ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 20,
+        "macd_slow": 33,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "512720.SH",
+      "name": "计算机ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 9,
+        "macd_slow": 35,
+        "macd_signal": 6
+      }
+    },
+    {
+      "code": "159326.SZ",
+      "name": "电网设备ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 10,
+        "macd_slow": 23,
+        "macd_signal": 4
+      }
+    },
+    {
+      "code": "516010.SH",
+      "name": "游戏ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 16,
+        "macd_slow": 39,
+        "macd_signal": 11
+      }
+    },
+    {
+      "code": "561360.SH",
+      "name": "石油ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 11,
+        "macd_slow": 33,
+        "macd_signal": 6
+      }
+    },
+    {
+      "code": "515980.SH",
+      "name": "人工智能ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 17,
+        "macd_slow": 33,
+        "macd_signal": 3
+      }
+    },
+    {
+      "code": "512690.SH",
+      "name": "酒ETF",
+      "sector": "酒",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 18,
+        "macd_slow": 35,
+        "macd_signal": 7
+      }
+    },
+    {
+      "code": "159365.SZ",
+      "name": "恒指ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive"
+    },
+    {
+      "code": "159688.SZ",
+      "name": "恒生互联网ETF",
+      "added_at": "2026-02-27",
+      "strategy": "macd_aggressive",
+      "optimized_macd_params": {
+        "macd_fast": 18,
+        "macd_slow": 39,
+        "macd_signal": 5
+      }
+    }
+  ],
+  "default_etf": "562360.SH",
+  "last_updated": "2026-02-28T00:01:09.738892"
+}
