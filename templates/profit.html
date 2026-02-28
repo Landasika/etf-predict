@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>收益汇总 - ETF预测系统</title>
+    <link rel="stylesheet" href="/static/css/earnings.css?v=11">
+    <script src="/static/js/echarts.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <header class="app-header">
+            <h1 class="app-title">💰 收益情况（所有ETF汇总）</h1>
+            <div class="header-stats">
+                <div class="stat-item">
+                    <span class="stat-label">📅 数据日期</span>
+                    <span id="dataDate" class="stat-value">--</span>
+                </div>
+            </div>
+            <nav class="nav-links">
+                <a href="/">策略汇总</a>
+                <a href="/macd-watchlist">详细策略</a>
+                <span class="current-page">收益情况</span>
+                <a href="/settings">⚙️ 系统设置</a>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            <!-- 操作栏 -->
+            <section class="action-bar">
+                <button id="refreshBtn" class="btn btn-primary">
+                    <span class="btn-icon">🔄</span> 刷新页面
+                </button>
+                <button id="updateDataBtn" class="btn btn-success">
+                    <span class="btn-icon">📥</span> 立即更新数据
+                </button>
+                <div class="last-updated">
+                    页面更新：<span id="lastUpdated">--</span>
+                </div>
+            </section>
+
+            <!-- 收益汇总卡片 -->
+            <section class="profit-summary-section">
+                <h2 class="section-title">📊 收益汇总</h2>
+                <div class="profit-summary-cards">
+                    <div class="profit-card">
+                        <span class="profit-label">ETF总数</span>
+                        <span class="profit-value" id="profitEtfCount">0</span>
+                    </div>
+                    <div class="profit-card">
+                        <span class="profit-label">总初始资金</span>
+                        <span class="profit-value" id="profitInitialCapital">¥0.00</span>
+                    </div>
+                    <div class="profit-card">
+                        <span class="profit-label">最新总资产</span>
+                        <span class="profit-value" id="profitCurrentValue">¥0.00</span>
+                    </div>
+                    <div class="profit-card">
+                        <span class="profit-label">总收益率</span>
+                        <span class="profit-value" id="profitTotalPct">0.00%</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 收益曲线图表 -->
+            <section class="charts-section" id="chartsSection" style="display: none;">
+                <div class="chart-header">
+                    <h2 class="section-title">📈 资产与仓位变化曲线</h2>
+                    <div class="view-toggle">
+                        <button id="viewDailyBtn" class="toggle-btn active" data-view="daily">
+                            <span class="btn-icon">📅</span>
+                            <span class="btn-text">日视图</span>
+                        </button>
+                        <button id="viewMonthlyBtn" class="toggle-btn" data-view="monthly">
+                            <span class="btn-icon">📊</span>
+                            <span class="btn-text">月视图</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="chart-wrapper-full">
+                    <div id="mainChart" class="chart-container-full"></div>
+                </div>
+            </section>
+
+            <!-- 收益日历 -->
+            <section class="profit-calendar-section">
+                <div class="section-header">
+                    <div class="section-title-group">
+                        <h2 class="section-title">📅 收益日历</h2>
+                        <small class="section-subtitle">所有ETF汇总</small>
+                    </div>
+                    <div class="calendar-view-toggle">
+                        <button id="calendarViewDailyBtn" class="toggle-btn active" data-view="daily">
+                            <span class="btn-icon">📅</span>
+                            <span class="btn-text">日视图</span>
+                        </button>
+                        <button id="calendarViewMonthlyBtn" class="toggle-btn" data-view="monthly">
+                            <span class="btn-icon">📊</span>
+                            <span class="btn-text">月视图</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="calendar-loading-container" id="calendarLoadingContainer">
+                    <button id="loadProfitDataBtn" class="btn-load-profit">
+                        <span class="btn-icon">📊</span>
+                        <span class="btn-text">加载所有ETF收益数据</span>
+                    </button>
+                    <p class="loading-hint">点击加载所有自选ETF的汇总收益数据（可能需要10-30秒）</p>
+                </div>
+
+                <div id="profitContent" class="profit-content" style="display: none;">
+                    <!-- 日视图导航 -->
+                    <div id="dailyViewControls" class="calendar-controls">
+                        <button id="prevMonthBtn" class="calendar-btn">◀ 上月</button>
+                        <span id="currentMonthLabel" class="month-label">2025年1月</span>
+                        <button id="nextMonthBtn" class="calendar-btn">下月 ▶</button>
+                    </div>
+
+                    <!-- 月视图导航 -->
+                    <div id="yearlyViewControls" class="calendar-controls" style="display: none;">
+                        <button id="prevYearBtn" class="calendar-btn">◀ 上年</button>
+                        <span id="currentYearLabel" class="month-label">2025年</span>
+                        <button id="nextYearBtn" class="calendar-btn">下年 ▶</button>
+                    </div>
+
+                    <div id="profitCalendar" class="profit-calendar"></div>
+                    <div class="calendar-legend">
+                        <span class="legend-item"><span class="legend-color profit-positive"></span>盈利</span>
+                        <span class="legend-item"><span class="legend-color profit-negative"></span>亏损</span>
+                        <span class="legend-item"><span class="legend-color profit-neutral"></span>无交易/休市</span>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/js/earnings.js?v=14"></script>
+</body>
+</html>

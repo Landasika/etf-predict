@@ -26,29 +26,38 @@ body {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     padding: 30px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
 }
 
 .settings-header h1 {
     font-size: 28px;
     font-weight: 600;
+    margin-bottom: 20px;
 }
 
-.back-btn {
-    color: white;
-    text-decoration: none;
-    padding: 10px 20px;
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 8px;
-    transition: all 0.3s;
+.nav-links {
+    display: flex;
+    gap: 20px;
     font-size: 14px;
 }
 
-.back-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-    transform: translateX(-3px);
+.nav-links a {
+    color: rgba(255, 255, 255, 0.8);
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 20px;
+    transition: all 0.3s;
+}
+
+.nav-links a:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.nav-links .current-page {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 20px;
 }
 
 /* Content */

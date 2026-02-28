@@ -5,7 +5,7 @@
       "name": "机器人ETF",
       "sector": "机器人",
       "added_at": "2026-02-17",
-      "strategy": "rsi_triple_lines",
+      "strategy": "macd_aggressive",
       "total_positions": 10,
       "build_position_date": "",
       "position_value": 2000,
@@ -535,5 +535,5 @@
     }
   ],
   "default_etf": "562360.SH",
-  "last_updated": "2026-02-28T00:01:09.738892"
+  "last_updated": "2026-02-28T22:40:40.786132"
 }

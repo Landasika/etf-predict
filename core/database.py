@@ -138,7 +138,8 @@ def get_etf_connection():
     """Get connection to ETF database."""
     if not Path(DATABASE_PATH).exists():
         return None
-    conn = sqlite3.connect(DATABASE_PATH)
+    # 添加超时设置，防止数据库锁定导致段错误
+    conn = sqlite3.connect(DATABASE_PATH, timeout=30.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -480,7 +481,7 @@ def get_table_last_update(db_path: str, table_name: str) -> Optional[str]:
         if not Path(db_path).exists():
             return None
 
-        conn = sqlite3.connect(db_path)
+        conn = sqlite3.connect(db_path, timeout=30.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 

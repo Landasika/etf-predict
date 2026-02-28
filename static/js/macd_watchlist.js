@@ -10,6 +10,8 @@ let watchlistData = null;
 let backtestChart = null;
 let klineChart = null;
 let positionHistoryChart = null;  // 仓位历史图表
+let profitCurveChart = null;  // 收益曲线图表
+let profitPositionChart = null;  // 收益页面仓位图表
 let optimizedMacdParams = null;  // 存储优化后的MACD参数
 let currentMacdParams = null;  // 当前使用的MACD参数
 
@@ -397,7 +399,6 @@ function updateOptimizeButtonVisibility(strategy) {
             resetBtn.onclick = resetRsiTripleLinesParams;
         } else {
             resetBtn.onclick = resetMacdParams;
-        }
         }
     }
 }
@@ -965,6 +966,9 @@ async function loadBacktestData(etfCode, strategy) {
         renderBacktestChart(data);
         renderTrades(data);
 
+        // 不再自动加载收益情况页面（避免性能问题）
+        // 用户需要手动点击"加载收益数据"按钮
+
         // 对于RSI+MACD+KDJ三指标策略、纯RSI策略和RSI三线策略，绘制仓位历史图表
         if (strategy === 'rsi_macd_kdj_triple' || strategy === 'pure_rsi' || strategy === 'rsi_triple_lines') {
             renderPositionHistoryChart(data);
@@ -1296,7 +1300,7 @@ function renderPositionHistoryChart(data) {
         }
         return date;
     });
-    const positions = performance.map(p => p.position_units || 0);
+    const positions = performance.map(p => p.positions_used || 0);
     const prices = performance.map(p => p.price || 0);
 
     const option = {

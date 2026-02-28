@@ -682,6 +682,7 @@ def run_macd_backtest_with_settings(etf_code: str, start_date: str, strategy: st
 
         # 过滤后的交易记录
         trades = filtered_trades
+        performance = filtered_performance  # 确保performance指向过滤后的数据
 
         print(f"[建仓回测完成] 初始资产: {initial_capital_at_build:.2f}, 最终: {final_value:.2f}, 收益: {adjusted_profit:.2f} ({adjusted_return_pct:.2f}%), 交易次数: {total_trades}")
 
@@ -759,6 +760,8 @@ def run_macd_backtest_with_settings(etf_code: str, start_date: str, strategy: st
             prices = performance['price'].tolist()
             # 添加成交量数据
             volumes = performance['vol'].tolist() if 'vol' in performance.columns else []
+            # 将DataFrame转换为list格式供前端使用
+            performance = performance.to_dict('records')
         elif isinstance(performance, list) and len(performance) > 0:
             # performance是list（向后兼容）
             dates = [p['date'] for p in performance]
@@ -879,7 +882,8 @@ def run_macd_backtest_with_settings(etf_code: str, start_date: str, strategy: st
             'strategy_values': strategy_values,
             'benchmark_values': benchmark_values,
             'buy_signals': buy_signals,
-            'sell_signals': sell_signals
+            'sell_signals': sell_signals,
+            'performance': performance  # 添加performance数据供收益情况页面使用
         },
         'strategy': strategy
     }

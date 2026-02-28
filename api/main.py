@@ -94,6 +94,12 @@ async def settings_page(request: Request):
     return templates.TemplateResponse("settings.html", {"request": request})
 
 
+@app.get("/profit", response_class=HTMLResponse)
+async def profit_page(request: Request):
+    """Profit summary page - 所有ETF汇总收益"""
+    return templates.TemplateResponse("profit.html", {"request": request})
+
+
 # ==================== 批量数据端点 ====================
 
 @app.get("/api/watchlist/batch-signals")
@@ -635,6 +641,140 @@ async def run_backtest_for_watchlist(etf_code: str, start_date: Optional[str] = 
         raise HTTPException(status_code=400, detail=result['message'])
 
     return result
+
+
+@app.get("/api/profit/all-etfs-daily")
+async def get_all_etfs_daily_profit(start_date: Optional[str] = '20240101'):
+    """获取所有自选ETF的每日汇总收益（用于收益日历和图表）
+
+    返回所有ETF每天的总收益/亏损金额、仓位变化、累计收益曲线
+    """
+    from core.watchlist import load_watchlist, run_backtest
+    from collections import defaultdict
+    from datetime import datetime
+
+    watchlist = load_watchlist()
+    etfs = watchlist.get('etfs', [])
+
+    # 按日期汇总数据
+    daily_data_map = defaultdict(lambda: {
+        'total_profit': 0,
+        'total_positions': 0,
+        'total_value': 0,
+        'etf_profits': [],
+        'active_etfs': set()
+    })
+
+    # 存储所有日期的总资产和仓位数据
+    timeline_data = {}
+
+    for etf in etfs:
+        etf_code = etf['code']
+        strategy = etf.get('strategy', 'macd_aggressive')
+        initial_capital = etf.get('initial_capital', 2000)
+
+        try:
+            # 获取该ETF的回测数据
+            result = run_backtest(etf_code, start_date, strategy)
+
+            if not result['success'] or not result.get('data'):
+                continue
+
+            performance = result['data'].get('performance', [])
+            if not performance or len(performance) == 0:
+                continue
+
+            # 处理每天的回测数据
+            for i in range(len(performance)):
+                p = performance[i]
+                date_str = str(p['date'])
+
+                # 初始化该日期的数据
+                if date_str not in timeline_data:
+                    timeline_data[date_str] = {
+                        'date': date_str,
+                        'total_value': 0,
+                        'total_positions': 0,
+                        'active_etf_count': 0
+                    }
+
+                # 计算单日收益（使用实际的portfolio_value，而不是假设等于initial_capital）
+                curr_value = p.get('portfolio_value', initial_capital)
+                if i == 0:
+                    # 第一天收益为0，但current_value使用实际的portfolio_value
+                    daily_profit = 0
+                    current_value = curr_value
+                else:
+                    prev_value = performance[i-1].get('portfolio_value', initial_capital)
+                    daily_profit = curr_value - prev_value
+                    current_value = curr_value
+
+                positions_used = p.get('positions_used', 0)
+
+                daily_data_map[date_str]['total_profit'] += daily_profit
+                daily_data_map[date_str]['total_positions'] += positions_used
+                daily_data_map[date_str]['total_value'] += current_value
+                daily_data_map[date_str]['active_etfs'].add(etf_code)
+                daily_data_map[date_str]['etf_profits'].append({
+                    'code': etf_code,
+                    'name': etf.get('name', etf_code),
+                    'profit': daily_profit,
+                    'positions': positions_used
+                })
+
+                # 累加到时间线数据
+                timeline_data[date_str]['total_value'] += current_value
+                timeline_data[date_str]['total_positions'] += positions_used
+
+        except Exception as e:
+            print(f"Error processing {etf_code}: {e}")
+            continue
+
+    # 计算总初始资本
+    total_initial_capital = sum([etf.get('initial_capital', 2000) for etf in etfs])
+    total_positions_max = sum([etf.get('total_positions', 10) for etf in etfs])
+
+    # 转换为列表格式
+    daily_profit_list = []
+    timeline_list = []
+    cumulative_value = total_initial_capital
+
+    for date_str in sorted(timeline_data.keys()):
+        data = daily_data_map[date_str]
+
+        # 计算该日期涉及的ETF数量
+        etf_count = len(data['active_etfs'])
+
+        # 构建每日收益数据
+        daily_profit_list.append({
+            'date': date_str,
+            'daily_profit': data['total_profit'],
+            'etf_count': etf_count,
+            'etf_profits': data['etf_profits']
+        })
+
+        # 计算累计收益
+        cumulative_value = data['total_value']
+
+        # 构建时间线数据
+        timeline_list.append({
+            'date': date_str,
+            'total_value': cumulative_value,
+            'total_positions': timeline_data[date_str]['total_positions'],
+            'cumulative_profit': cumulative_value - total_initial_capital,
+            'active_etf_count': timeline_data[date_str]['active_etf_count']
+        })
+
+    return {
+        'success': True,
+        'data': {
+            'daily_profits': daily_profit_list,
+            'timeline': timeline_list,
+            'total_initial_capital': total_initial_capital,
+            'total_positions_max': total_positions_max,
+            'etf_count': len(etfs)
+        }
+    }
 
 
 @app.put("/api/watchlist/{etf_code}/position")

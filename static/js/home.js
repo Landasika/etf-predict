@@ -1,5 +1,5 @@
 // 首页策略汇总
-console.log('📝 home.js v72 已加载 - 添加实时监控倒计时显示');
+console.log('📝 home.js v74 已加载');
 
 // 实时更新控制
 let realtimeEnabled = false;
