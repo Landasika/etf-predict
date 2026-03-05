@@ -1054,9 +1054,11 @@ body {
 /* ==================== 操作建议模态框 ==================== */
 
 #adviceModal .modal-content {
-    max-width: 1000px;
+    max-width: 1200px;
+    width: 95%;
     border-radius: 16px;
     overflow: hidden;
+    margin: auto;
 }
 
 #adviceModal .modal-header {
@@ -1155,6 +1157,7 @@ body {
     border-collapse: collapse;
     background: white;
     margin: 0;
+    table-layout: fixed;
 }
 
 .advice-table thead {
@@ -1169,6 +1172,37 @@ body {
     font-weight: 600;
     letter-spacing: 0.5px;
     text-transform: uppercase;
+}
+
+/* 使用类名设置表格列宽，更可靠 */
+.advice-table .col-code {
+    width: 100px;
+    min-width: 100px;
+}
+
+.advice-table .col-name {
+    width: 130px;
+    min-width: 130px;
+}
+
+.advice-table .col-price {
+    width: 80px;
+    min-width: 80px;
+}
+
+.advice-table .col-macd {
+    width: 150px;
+    min-width: 150px;
+}
+
+.advice-table .col-signal {
+    width: 100px;
+    min-width: 100px;
+}
+
+.advice-table .col-advice {
+    width: 320px;
+    min-width: 320px;
 }
 
 .advice-table tbody tr {
@@ -1216,8 +1250,11 @@ body {
     font-weight: 700;
     color: #059669;
     display: inline-flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 6px;
+    min-width: 280px;
+    line-height: 1.5;
 }
 
 .advice-action::before {

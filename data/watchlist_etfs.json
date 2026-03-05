@@ -14,7 +14,8 @@
         "macd_fast": 20,
         "macd_slow": 38,
         "macd_signal": 11
-      }
+      },
+      "remark": "南方中证机器人ETF联接C"
     },
     {
       "code": "515790.SH",
@@ -30,7 +31,8 @@
         "macd_fast": 20,
         "macd_slow": 33,
         "macd_signal": 11
-      }
+      },
+      "remark": "汇添富中证光伏产业ETF联接C"
     },
     {
       "code": "159870.SZ",
@@ -46,7 +48,8 @@
         "macd_fast": 17,
         "macd_slow": 29,
         "macd_signal": 5
-      }
+      },
+      "remark": "天弘中证细分化工产业主题ETF联接C"
     },
     {
       "code": "512980.SH",
@@ -78,7 +81,8 @@
         "macd_fast": 12,
         "macd_slow": 33,
         "macd_signal": 10
-      }
+      },
+      "remark": "国泰中证煤炭ETF联接C"
     },
     {
       "code": "159852.SZ",
@@ -94,7 +98,8 @@
         "macd_fast": 17,
         "macd_slow": 35,
         "macd_signal": 11
-      }
+      },
+      "remark": "国泰中证全指软件ETF联接C"
     },
     {
       "code": "518880.SH",
@@ -110,23 +115,8 @@
         "macd_fast": 18,
         "macd_slow": 32,
         "macd_signal": 7
-      }
-    },
-    {
-      "code": "159827.SZ",
-      "name": "农业ETF",
-      "sector": "农业",
-      "added_at": "2026-02-17",
-      "strategy": "macd_aggressive",
-      "total_positions": 10,
-      "build_position_date": "",
-      "position_value": 2000,
-      "initial_capital": 2000,
-      "optimized_macd_params": {
-        "macd_fast": 20,
-        "macd_slow": 38,
-        "macd_signal": 11
-      }
+      },
+      "remark": "博时黄金ETF联接C"
     },
     {
       "code": "159755.SZ",
@@ -142,7 +132,8 @@
         "macd_fast": 14,
         "macd_slow": 32,
         "macd_signal": 9
-      }
+      },
+      "remark": "招商中证电池主题ETF联接C"
     },
     {
       "code": "159206.SZ",
@@ -158,7 +149,8 @@
         "macd_fast": 11,
         "macd_slow": 19,
         "macd_signal": 5
-      }
+      },
+      "remark": "永赢国证商用卫星通信产业ETF联接C"
     },
     {
       "code": "159928.SZ",
@@ -198,7 +190,8 @@
         "macd_fast": 15,
         "macd_slow": 29,
         "macd_signal": 11
-      }
+      },
+      "remark": "天弘中证电子ETF联接C"
     },
     {
       "code": "512760.SH",
@@ -214,7 +207,8 @@
         "macd_fast": 11,
         "macd_slow": 23,
         "macd_signal": 9
-      }
+      },
+      "remark": "易方达上证科创板芯片ETF联接C"
     },
     {
       "code": "512480.SH",
@@ -230,7 +224,8 @@
         "macd_fast": 13,
         "macd_slow": 29,
         "macd_signal": 7
-      }
+      },
+      "remark": "国联安中证全指半导体产品与设备ETF联接C"
     },
     {
       "code": "512660.SH",
@@ -294,7 +289,8 @@
         "macd_fast": 12,
         "macd_slow": 30,
         "macd_signal": 6
-      }
+      },
+      "remark": "国泰中证全指通信设备ETF联接C"
     },
     {
       "code": "512400.SH",
@@ -447,7 +443,8 @@
         "macd_fast": 20,
         "macd_slow": 33,
         "macd_signal": 11
-      }
+      },
+      "remark": "富国中证农业主题ETF联接C"
     },
     {
       "code": "512720.SH",
@@ -458,7 +455,8 @@
         "macd_fast": 9,
         "macd_slow": 35,
         "macd_signal": 6
-      }
+      },
+      "remark": "国泰中证计算机主题ETF联接C"
     },
     {
       "code": "159326.SZ",
@@ -491,7 +489,8 @@
         "macd_fast": 11,
         "macd_slow": 33,
         "macd_signal": 6
-      }
+      },
+      "remark": "景顺长城国证石油天然气ETF联接C"
     },
     {
       "code": "515980.SH",
@@ -502,7 +501,8 @@
         "macd_fast": 17,
         "macd_slow": 33,
         "macd_signal": 3
-      }
+      },
+      "remark": "华宝创业板人工智能ETF联接C"
     },
     {
       "code": "512690.SH",
@@ -532,8 +532,19 @@
         "macd_slow": 39,
         "macd_signal": 5
       }
+    },
+    {
+      "code": "562800.SH",
+      "name": "稀有金属ETF",
+      "sector": "稀有金属",
+      "added_at": "2026-03-02",
+      "strategy": "macd_aggressive",
+      "total_positions": 10,
+      "build_position_date": "",
+      "position_value": 2000,
+      "initial_capital": 2000
     }
   ],
   "default_etf": "562360.SH",
-  "last_updated": "2026-02-28T22:40:40.786132"
+  "last_updated": "2026-03-02T23:01:26.984714"
 }

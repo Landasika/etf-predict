@@ -454,7 +454,8 @@ class MACDBacktester:
                 'portfolio_value': portfolio_value,
                 'price': price,
                 'pnl_pct': pnl_pct if position_shares > 0 else 0,
-                'vol': row.get('vol', 0)  # 添加成交量数据
+                'vol': row.get('vol', 0),  # 添加成交量数据
+                'signal_strength': signal_strength  # 添加信号强度
             })
 
         return trades, pd.DataFrame(performance_records)

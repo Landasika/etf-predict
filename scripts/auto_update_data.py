@@ -145,8 +145,9 @@ def get_etf_list_from_watchlist():
         return etfs
     except Exception as e:
         logger.error(f"获取watchlist失败: {e}")
-        # 如果watchlist加载失败，使用config中的默认列表
-        return [etf['code'] for etf in config.ETF_LIST[:20]]  # 限制前20个
+        # 如果watchlist加载失败，使用config中的函数读取
+        from config import get_etf_list
+        return get_etf_list()[:20]  # 限制前20个
 
 
 def download_latest_data(etf_code, target_date):

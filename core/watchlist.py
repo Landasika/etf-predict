@@ -20,6 +20,29 @@ import numpy as np
 from core.database import get_etf_info, get_etf_daily_data
 
 
+def clean_nan_values(obj):
+    """递归清理数据中的NaN和Inf值，使其可被JSON序列化
+
+    Args:
+        obj: 要清理的对象（dict, list, 或其他类型）
+
+    Returns:
+        清理后的对象，NaN/Inf替换为None，float保持为float
+    """
+    import math
+
+    if isinstance(obj, dict):
+        return {k: clean_nan_values(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean_nan_values(v) for v in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    else:
+        return obj
+
+
 # 数据文件路径
 WATCHLIST_FILE = 'data/watchlist_etfs.json'
 
@@ -835,10 +858,32 @@ def run_macd_backtest_with_settings(etf_code: str, start_date: str, strategy: st
                 'macd_dif': float(latest_row.get('macd_dif', 0)),
                 'macd_dea': float(latest_row.get('macd_dea', 0)),
                 'macd_hist': float(latest_row.get('macd_hist', 0)),
-                'signal_strength': float(latest_row.get('macd_dif', 0) - latest_row.get('macd_dea', 0))
+                'macd_dif_dea_diff': float(latest_row.get('macd_dif', 0) - latest_row.get('macd_dea', 0))  # MACD差值
             })
     except Exception as e:
         print(f"计算MACD指标失败: {e}")
+
+    # 从回测结果中获取正确的signal_strength（信号生成器生成的强度值）
+    if len(performance) > 0:
+        latest_perf = performance[-1]
+        # 如果回测结果中有signal_strength，使用它
+        if 'signal_strength' in latest_perf:
+            latest_signal['signal_strength'] = int(latest_perf['signal_strength'])
+        # 否则根据持仓变化推算
+        elif latest_positions_used > previous_positions_used:
+            # 今天买入，根据买入数量推算信号强度
+            positions_added = latest_positions_used - previous_positions_used
+            # 反推：买入X仓对应的signal_strength
+            if positions_added >= 10:
+                latest_signal['signal_strength'] = 10
+            elif positions_added >= 6:
+                latest_signal['signal_strength'] = 9
+            elif positions_added >= 4:
+                latest_signal['signal_strength'] = 7
+            else:
+                latest_signal['signal_strength'] = 6
+        else:
+            latest_signal['signal_strength'] = 0
 
     # 计算KDJ指标（用于显示，所有策略都计算）
     try:
@@ -856,7 +901,7 @@ def run_macd_backtest_with_settings(etf_code: str, start_date: str, strategy: st
         print(f"计算KDJ指标失败: {e}")
 
     # 构建返回数据
-    return {
+    result = {
         'success': True,
         'data': {
             'latest_date': latest_signal['date'],  # 最新数据日期
@@ -887,6 +932,9 @@ def run_macd_backtest_with_settings(etf_code: str, start_date: str, strategy: st
         },
         'strategy': strategy
     }
+
+    # 清理NaN值，防止JSON序列化失败
+    return clean_nan_values(result)
 
 
 def run_macd_backtest(etf_code: str, start_date: str = '20250101', strategy: str = None,
@@ -1069,7 +1117,7 @@ def calculate_realtime_signal_macd_kdj_discrete(etf_code: str, start_date: str =
         latest_signal
     )
 
-    return {
+    result = {
         'success': True,
         'data': {
             'latest_date': latest_signal['date'],
@@ -1107,6 +1155,8 @@ def calculate_realtime_signal_macd_kdj_discrete(etf_code: str, start_date: str =
         },
         'strategy': 'macd_kdj_discrete'
     }
+
+    return clean_nan_values(result)
 
 
 def _generate_next_action_macd_kdj_discrete(positions_used: int, latest_signal: Dict) -> str:
@@ -1609,7 +1659,7 @@ def calculate_realtime_signal_pure_rsi(etf_code: str, start_date: str = '2025010
         latest_signal
     )
 
-    return {
+    result = {
         'success': True,
         'data': {
             'latest_date': latest_signal['date'],
@@ -1649,6 +1699,8 @@ def calculate_realtime_signal_pure_rsi(etf_code: str, start_date: str = '2025010
         },
         'strategy': 'pure_rsi'
     }
+
+    return clean_nan_values(result)
 
 
 def _generate_next_action_pure_rsi(positions_used: int, latest_signal: Dict) -> str:

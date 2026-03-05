@@ -10,6 +10,7 @@ from fastapi import Request
 from typing import Optional, List
 import sys
 import os
+import logging
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
@@ -201,6 +202,53 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
             'position_cap': latest_data.get('kdj_position_cap', 10)
         }
 
+        # 计算今日操作
+        current_positions = signal_data.get('positions_used', 0)
+        previous_positions = latest_data.get('previous_positions_used', 0)
+        today_action = current_positions - previous_positions
+
+        # 确定操作原因
+        action_reason = ''
+        if today_action > 0:
+            # 买入
+            if latest_data.get('signal_type') == 'BUY':
+                strength = latest_data.get('signal_strength', 0)
+                if strength >= 10:
+                    action_reason = '回踩MA60未破+MACD金叉，最强买入信号'
+                elif strength >= 9:
+                    action_reason = '正鸭嘴形态，强烈看多'
+                elif strength >= 8:
+                    action_reason = '零轴上方金叉，上升趋势明确'
+                else:
+                    action_reason = 'MACD金叉买入'
+            else:
+                action_reason = '加仓买入'
+        elif today_action < 0:
+            # 卖出
+            macd_dif = latest_data.get('macd_dif', 0)
+            macd_dea = latest_data.get('macd_dea', 0)
+            kdj_k = latest_data.get('kdj_k', 0)
+            kdj_status = '严重超买' if kdj_k > 80 else ('超买' if kdj_k > 70 else '正常')
+
+            if kdj_status == '严重超买':
+                action_reason = f'KDJ{kdj_status}，止盈减仓'
+            elif macd_dif < macd_dea:
+                action_reason = 'MACD死叉，减仓避险'
+            elif current_positions > 7:
+                action_reason = '涨幅较大，分批止盈'
+            else:
+                action_reason = '信号转弱，减仓保住利润'
+        else:
+            # 持有
+            action_reason = '保持现有仓位'
+
+        if today_action > 0:
+            today_operation = f'买入{today_action}仓'
+        elif today_action < 0:
+            today_operation = f'卖出{abs(today_action)}仓'
+        else:
+            today_operation = '持有'
+
         results.append({
             'code': etf_code,
             'name': etf_info.get('extname', etf_code),
@@ -208,11 +256,15 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
             'strategy_name': etf.get('strategy_name', strategy),
             'signal': latest_data.get('signal_type', 'HOLD'),
             'signal_name': get_signal_name(latest_data.get('signal_type', 'HOLD')),
+            'signal_strength': latest_data.get('signal_strength', 0),  # 添加信号强度
+            'today_operation': today_operation,  # 今日操作
+            'today_action_count': today_action,  # 今日操作数量（正数买入，负数卖出）
+            'action_reason': action_reason,  # 操作原因
             'profit_value': signal_data.get('profit', 0),
             'profit_pct': signal_data.get('profit_pct', 0),
             'benchmark_return': backtest_summary.get('buy_hold_return_pct', 0) or 0,
             'positions_used': signal_data.get('positions_used', 0),
-            'total_positions': 10,  # 固定值，不再显示
+            'total_positions': etf.get('total_positions', 10),  # 从配置读取
             'next_action': signal_data.get('next_action', '--'),
             'macd': {
                 'dif': latest_data.get('macd_dif', 0),

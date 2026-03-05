@@ -227,13 +227,23 @@ function renderStrategyTable(data) {
             <span class="data-date-badge">${dataUpdateDate}</span>
         `;
 
+        // 今日操作样式
+        let todayOperationClass = '';
+        if (item.today_action_count > 0) {
+            todayOperationClass = 'signal-badge buy';  // 买入
+        } else if (item.today_action_count < 0) {
+            todayOperationClass = 'signal-badge sell';  // 卖出
+        } else {
+            todayOperationClass = 'signal-badge hold';  // 持有
+        }
+
         return `
         <tr>
             <td><strong>${item.code}</strong></td>
             <td>${item.name}</td>
             <td><span class="strategy-name">${shortStrategyName}</span></td>
             <td>${paramsDisplay}</td>
-            <td><span class="signal-badge ${item.signal.toLowerCase()}">${item.signal_name}</span></td>
+            <td><span class="${todayOperationClass}">${item.today_operation || item.signal_name}</span></td>
             <td><strong>${item.next_action}</strong></td>
             <td>
                 <span class="${getProfitClass(strategyReturn)}">
@@ -339,7 +349,7 @@ function sortStrategyData(column, direction) {
         'ETF代码': 'code',
         'ETF名称': 'name',
         '策略': 'strategy',
-        '当前信号': 'signal',
+        '今日操作': 'today_action_count',
         '下个交易日操作': 'next_action',
         '近一年策略收益率': 'profit_pct',
         '近一年股票涨幅率': 'benchmark_return',
@@ -354,11 +364,11 @@ function sortStrategyData(column, direction) {
         let valA = a[field];
         let valB = b[field];
 
-        // 特殊处理信号排序
-        if (column === '当前信号') {
-            const signalOrder = {'BUY': 1, 'HOLD': 2, 'SELL': 3};
-            valA = signalOrder[valA] || 2;
-            valB = signalOrder[valB] || 2;
+        // 今日操作按数值排序（买入最多排最前）
+        if (column === '今日操作') {
+            // today_action_count: 正数买入，负数卖出，0持有
+            // 排序：买入多 > 买入少 > 持有 > 卖出少 > 卖出多
+            return direction === 'asc' ? valA - valB : valB - valA;
         }
 
         if (typeof valA === 'string') {
@@ -1454,7 +1464,9 @@ async function saveRealtimeSettings() {
  * 显示操作建议模态框
  */
 async function showAdviceModal() {
-    document.getElementById('adviceModal').style.display = 'block';
+    const modal = document.getElementById('adviceModal');
+    modal.classList.add('show');
+    modal.style.display = 'flex';
     await loadAdvice();
 }
 
@@ -1462,7 +1474,9 @@ async function showAdviceModal() {
  * 隐藏操作建议模态框
  */
 function hideAdviceModal() {
-    document.getElementById('adviceModal').style.display = 'none';
+    const modal = document.getElementById('adviceModal');
+    modal.classList.remove('show');
+    modal.style.display = 'none';
 }
 
 /**
@@ -1493,8 +1507,11 @@ async function loadAdvice() {
             macd_dif: etf.macd.dif,
             macd_dea: etf.macd.dea,
             macd_hist: etf.macd.hist,
+            signal_strength: etf.signal_strength || 0,  // 使用API返回的信号强度
             positions_used: etf.positions_used,
-            profit_pct: etf.profit_pct
+            total_positions: etf.total_positions || 10,
+            profit_pct: etf.profit_pct,
+            action_reason: etf.action_reason || ''  // 添加操作原因
         }));
 
         const buySignals = formattedSignals.filter(s => s.signal === 'BUY');
@@ -1509,51 +1526,62 @@ async function loadAdvice() {
             html += '<div class="advice-section advice-buy">';
             html += '<h3>🟢 建议买入 (' + buySignals.length + '只)</h3>';
             html += '<table class="advice-table">';
-            html += '<thead><tr><th>代码</th><th>名称</th><th>现价</th><th>MACD</th><th>信号强度</th><th>操作建议</th></tr></thead>';
+            html += '<thead><tr><th class="col-code">代码</th><th class="col-name">名称</th><th class="col-price">现价</th><th class="col-macd">MACD</th><th class="col-signal">信号强度</th><th class="col-advice">操作理由</th></tr></thead>';
             html += '<tbody>';
 
             buySignals.forEach(etf => {
-                // 计算信号强度：使用MACD DIF和DEA的差值
                 const dif = etf.macd_dif;
                 const dea = etf.macd_dea;
-                const strength = Math.abs(dif - dea);
+                const strength = etf.signal_strength;  // 使用信号生成器的强度值
+                const totalPos = etf.total_positions || 10;
+                const actualReason = etf.action_reason || 'MACD金叉买入';  // 使用实际的操作原因
 
+                // 根据signal_strength计算建议仓位（与回测逻辑完全一致）
+                // strength 1-3: 1-2仓, 4-6: 3-5仓(strength-1), 7-9: 6-9仓(等于strength), 10: 10仓(满仓)
+                let desiredPositions = 0;
                 let advice = '';
-                let positionSize = 0;
                 let strengthLevel = '';
                 let strengthEmoji = '';
 
-                if (strength > 0.02) {
-                    advice = '满仓买入';
-                    positionSize = 10;
-                    strengthLevel = '极强';
-                    strengthEmoji = '🔥🔥🔥';
-                } else if (strength > 0.015) {
-                    advice = '重仓买入';
-                    positionSize = 8;
-                    strengthLevel = '强';
-                    strengthEmoji = '🔥🔥';
-                } else if (strength > 0.01) {
-                    advice = '半仓买入';
-                    positionSize = 5;
-                    strengthLevel = '中';
-                    strengthEmoji = '🔥';
-                } else {
-                    advice = '轻仓试探';
-                    positionSize = 3;
+                if (strength <= 3) {
+                    desiredPositions = Math.min(strength, 2);
+                    advice = '买入' + desiredPositions + '仓';
                     strengthLevel = '弱';
                     strengthEmoji = '✨';
+                } else if (strength <= 6) {
+                    desiredPositions = strength - 1;  // 3-5仓
+                    advice = '买入' + desiredPositions + '仓';
+                    strengthLevel = '中';
+                    strengthEmoji = '🔥';
+                } else if (strength <= 9) {
+                    desiredPositions = strength;  // 6-9仓
+                    advice = '买入' + desiredPositions + '仓';
+                    if (strength === 9) {
+                        strengthLevel = '极强';
+                        strengthEmoji = '🔥🔥🔥';
+                    } else if (strength === 8) {
+                        strengthLevel = '强';
+                        strengthEmoji = '🔥🔥';
+                    } else {
+                        strengthLevel = '中强';
+                        strengthEmoji = '🔥🔥';
+                    }
+                } else {
+                    desiredPositions = totalPos;  // 满仓
+                    advice = '买入' + desiredPositions + '仓';
+                    strengthLevel = '极强';
+                    strengthEmoji = '🔥🔥🔥';
                 }
 
                 const macdStatus = dif > 0 && dea > 0 ? '零轴上' : (dif < 0 && dea < 0 ? '零轴下' : '穿越中');
 
                 html += '<tr>';
-                html += '<td>' + etf.code + '</td>';
-                html += '<td>' + etf.name + '</td>';
-                html += '<td>' + etf.close.toFixed(3) + '</td>';
-                html += '<td style="font-size:12px;color:#6b7280;">DIF:' + dif.toFixed(4) + '<br>DEA:' + dea.toFixed(4) + '<br>' + macdStatus + '</td>';
-                html += '<td class="signal-strength">' + strengthEmoji + ' ' + strengthLevel + '</td>';
-                html += '<td class="advice-action">建议' + advice + ' (建仓' + positionSize + '成)</td>';
+                html += '<td class="col-code">' + etf.code + '</td>';
+                html += '<td class="col-name">' + etf.name + '</td>';
+                html += '<td class="col-price">' + etf.close.toFixed(3) + '</td>';
+                html += '<td class="col-macd" style="font-size:12px;color:#6b7280;">DIF:' + dif.toFixed(4) + '<br>DEA:' + dea.toFixed(4) + '<br>' + macdStatus + '</td>';
+                html += '<td class="col-signal">' + strengthEmoji + ' ' + strengthLevel + ' (强度' + strength + ')</td>';
+                html += '<td class="col-advice"><strong>' + advice + '</strong><br><span style="font-size:12px;color:#6b7280;font-weight:normal;">' + actualReason + '</span></td>';
                 html += '</tr>';
             });
 
@@ -1565,41 +1593,48 @@ async function loadAdvice() {
             html += '<div class="advice-section advice-sell">';
             html += '<h3>🔴 建议卖出 (' + sellSignals.length + '只)</h3>';
             html += '<table class="advice-table">';
-            html += '<thead><tr><th>代码</th><th>名称</th><th>现价</th><th>MACD</th><th>风险级别</th><th>操作建议</th></tr></thead>';
+            html += '<thead><tr><th class="col-code">代码</th><th class="col-name">名称</th><th class="col-price">现价</th><th class="col-macd">MACD</th><th class="col-signal">风险级别</th><th class="col-advice">操作理由</th></tr></thead>';
             html += '<tbody>';
 
             sellSignals.forEach(etf => {
                 const dif = etf.macd_dif;
                 const dea = etf.macd_dea;
-                const diff = dif - dea;
+                const strength = etf.signal_strength;  // 负数，如-6, -7, -8, -9, -10
+                const totalPos = etf.total_positions || 10;
+                const actualReason = etf.action_reason || 'MACD信号转弱';  // 使用实际的操作原因
 
                 let riskLevel = '';
                 let riskEmoji = '';
                 let advice = '';
+                let positionsToClose = 0;
 
-                if (diff < -0.02) {
-                    riskLevel = '高风险';
-                    riskEmoji = '⚠️⚠️⚠️';
-                    advice = '立即清仓';
-                } else if (dif < 0 && dea < 0) {
-                    riskLevel = '中风险';
-                    riskEmoji = '⚠️⚠️';
-                    advice = '减仓观望';
-                } else {
+                // 与回测逻辑完全一致（使用回测的公式）
+                if (strength >= -3) {
+                    positionsToClose = Math.min(totalPos, 1 + Math.abs(strength));
+                    advice = '减仓' + positionsToClose + '仓';
                     riskLevel = '低风险';
                     riskEmoji = '⚠️';
-                    advice = '减仓50%';
+                } else if (strength >= -6) {
+                    positionsToClose = Math.min(totalPos, 3 + Math.abs(strength) - 3);
+                    advice = '减仓' + positionsToClose + '仓';
+                    riskLevel = '中风险';
+                    riskEmoji = '⚠️⚠️';
+                } else {
+                    positionsToClose = totalPos;  // 清仓
+                    advice = '清仓';
+                    riskLevel = '高风险';
+                    riskEmoji = '⚠️⚠️⚠️';
                 }
 
                 const macdStatus = dif > 0 && dea > 0 ? '零轴上' : (dif < 0 && dea < 0 ? '零轴下' : '穿越中');
 
                 html += '<tr>';
-                html += '<td>' + etf.code + '</td>';
-                html += '<td>' + etf.name + '</td>';
-                html += '<td>' + etf.close.toFixed(3) + '</td>';
-                html += '<td style="font-size:12px;color:#6b7280;">DIF:' + dif.toFixed(4) + '<br>DEA:' + dea.toFixed(4) + '<br>' + macdStatus + '</td>';
-                html += '<td>' + riskEmoji + ' ' + riskLevel + '</td>';
-                html += '<td class="advice-action" style="color:#dc2626;">' + advice + '</td>';
+                html += '<td class="col-code">' + etf.code + '</td>';
+                html += '<td class="col-name">' + etf.name + '</td>';
+                html += '<td class="col-price">' + etf.close.toFixed(3) + '</td>';
+                html += '<td class="col-macd" style="font-size:12px;color:#6b7280;">DIF:' + dif.toFixed(4) + '<br>DEA:' + dea.toFixed(4) + '<br>' + macdStatus + '</td>';
+                html += '<td class="col-signal">' + riskEmoji + ' ' + riskLevel + ' (强度' + Math.abs(strength) + ')</td>';
+                html += '<td class="col-advice"><strong>' + advice + '</strong><br><span style="font-size:12px;color:#6b7280;font-weight:normal;">' + actualReason + '</span></td>';
                 html += '</tr>';
             });
 

@@ -57,3 +57,6 @@ main_factors_weights*.json
 *.tmp
 temp/
 tmp/
+
+# 环境变量配置
+.env
