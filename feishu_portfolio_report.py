@@ -56,9 +56,8 @@ def generate_trading_recommendations_card(api_data: dict) -> str:
 
     # 计算总体统计
     total_positions = 0  # 总持仓数
-    total_initial_capital = 0  # 总初始资金
+    total_position_value = 0  # 按持仓计算的总资金
     total_daily_profit = 0  # 今日总收益
-    total_current_value = 0  # 当前总市值
     
     buy_recommendations = []
     sell_recommendations = []
@@ -79,9 +78,8 @@ def generate_trading_recommendations_card(api_data: dict) -> str:
         
         # 累计统计
         total_positions += current_positions
-        total_initial_capital += initial_capital
+        total_position_value += current_positions * 200  # 按持仓计算资金：持仓数 × 200
         total_daily_profit += daily_profit
-        total_current_value += (initial_capital + profit_value)
         
         if "买入" in today_operation:
             buy_recommendations.append({
@@ -124,20 +122,16 @@ def generate_trading_recommendations_card(api_data: dict) -> str:
     markdown_lines.append("| 项目 | 数值 |")
     markdown_lines.append("|:------|:------|")
     markdown_lines.append("| 昨日总仓位 | **{}仓** |".format(total_positions))
-    markdown_lines.append("| 昨日总资金 | **¥{:,}** |".format(total_initial_capital))
+    markdown_lines.append("| 昨日总资金 | **¥{:,}** |".format(total_position_value))  # 修复：按持仓计算
     markdown_lines.append("| 今日总收益 | **¥{:+,.2f}** |".format(total_daily_profit))
-    if total_current_value > 0:
-        total_profit = total_current_value - total_initial_capital
-        total_profit_pct = (total_profit / total_initial_capital * 100) if total_initial_capital > 0 else 0
-        markdown_lines.append("| 累计总收益 | **¥{:+,.2f} ({:+.2f}%)** |".format(total_profit, total_profit_pct))
     markdown_lines.append("")
     
     # 买入建议
     if buy_recommendations:
         markdown_lines.append("### 🟢 建议买入 ({})".format(len(buy_recommendations)))
         markdown_lines.append("")
-        # 列顺序：ETF名称、操作、基金名称、代码、涨跌、价格、仓位
-        markdown_lines.append("| ETF名称 | 操作 | 基金名称 | 代码 | 涨跌 | 价格 | 今日收益 | 仓位 |")
+        # 列顺序：ETF名称、操作、基金名称、代码、涨跌、价格、今日收益、仓位
+        markdown_lines.append("| ETF名称 | 操作 | 基金名称 | 代码 | �涨跌 | 价格 | 今日收益 | 仓位 |")
         markdown_lines.append("|:--------|:------|:--------|:------|:------|:------|:------|:------|")
         
         for item in buy_recommendations:
@@ -155,7 +149,7 @@ def generate_trading_recommendations_card(api_data: dict) -> str:
     if sell_recommendations:
         markdown_lines.append("### 🔴 建议卖出 ({})".format(len(sell_recommendations)))
         markdown_lines.append("")
-        # 列顺序：ETF名称、操作、基金名称、代码、涨跌、价格、仓位
+        # 列顺序：ETF名称、操作、基金名称、代码、涨跌、价格、今日收益、仓位
         markdown_lines.append("| ETF名称 | 操作 | 基金名称 | 代码 | 涨跌 | 价格 | 今日收益 | 仓位 |")
         markdown_lines.append("|:--------|:------|:--------|:------|:------|:------|:------|:------|")
         
