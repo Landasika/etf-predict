@@ -75,10 +75,14 @@ def generate_trading_recommendations_card(api_data: dict) -> str:
         today_action_count = etf.get("today_action_count", 0)
         daily_profit = etf.get("daily_profit", 0)
         profit_value = etf.get("profit_value", 0)
-        
-        # 累计统计
-        total_positions += current_positions
-        total_position_value += current_positions * 200  # 按持仓计算资金：持仓数 × 200
+
+        # 获取昨日仓位
+        latest_data = etf.get("latest_data", {})
+        yesterday_positions = latest_data.get("previous_positions_used", 0)
+
+        # 累计统计（使用昨日仓位）
+        total_positions += yesterday_positions
+        total_position_value += yesterday_positions * 200  # 按持仓计算资金：持仓数 × 200
         total_daily_profit += daily_profit
         
         if "买入" in today_operation:
