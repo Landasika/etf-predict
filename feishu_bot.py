@@ -247,6 +247,16 @@ class FeishuBotManager:
             self.add_bot(bot_name, app_id, app_secret, chat_id)
             index += 1
 
+        # 兼容单机器人简化配置
+        single_app_id = os.getenv("FEISHU_APP_ID")
+        single_app_secret = os.getenv("FEISHU_APP_SECRET")
+        single_chat_id = os.getenv("FEISHU_CHAT_ID")
+
+        if all([single_app_id, single_app_secret, single_chat_id]):
+            single_name = os.getenv("FEISHU_BOT_NAME") or os.getenv("DEFAULT_BOT", "default")
+            if single_name not in self.bots:
+                self.add_bot(single_name, single_app_id, single_app_secret, single_chat_id)
+
     def add_bot(self, name: str, app_id: str, app_secret: str, chat_id: str):
         """
         添加机器人
