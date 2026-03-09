@@ -2,6 +2,7 @@
 ETF预测系统配置
 """
 import os
+import hashlib
 
 # 项目路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -16,6 +17,22 @@ API_HOST = '0.0.0.0'
 API_PORT = 8000  # API服务端口
 API_TITLE = 'ETF预测系统API'
 API_VERSION = '1.0.0'
+
+# ==================== 认证配置 ====================
+# 会话密钥（必须随机且保密，用于加密session cookie）
+SESSION_SECRET_KEY = os.getenv('SESSION_SECRET_KEY', 'change-this-in-production-please-use-env-var')
+
+# 认证秘钥（访问系统的密码）
+AUTH_KEY = os.getenv('AUTH_KEY', 'admin123')
+AUTH_KEY_HASH = hashlib.sha256(AUTH_KEY.encode()).hexdigest()
+
+# 登录失败限制（防暴力破解）
+MAX_LOGIN_ATTEMPTS = 5  # 最大尝试次数
+LOGIN_ATTEMPT_WINDOW = 300  # 时间窗口（秒），5分钟
+LOCKOUT_DURATION = 900  # 锁定时长（秒），15分钟
+
+# 模板引擎（将在api/main.py中初始化）
+templates = None
 
 # Tushare配置（可选，用于数据更新）
 TUSHARE_TOKEN = '5c778b0f7d4a69893ae98c6d3b6ef5637875125daee6205b435e9d20e9b4'

@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi import Request
+from starlette.middleware.sessions import SessionMiddleware
 from typing import Optional, List
 import sys
 import os
@@ -15,11 +16,62 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
 from core.database import get_etf_info
+from core.auth import router as auth_router, require_auth
 
 app = FastAPI(title=config.API_TITLE, version=config.API_VERSION)
 
+# 添加会话中间件（用于认证）
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=config.SESSION_SECRET_KEY,
+    max_age=None,  # 浏览器关闭时过期
+    same_site="lax",  # CSRF保护
+    https_only=False  # 生产环境建议设置为True
+)
+
+# API认证中间件
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+
+class APIAuthMiddleware(BaseHTTPMiddleware):
+    """API路由认证中间件
+
+    对所有 /api/* 路由进行身份验证
+    """
+    async def dispatch(self, request, call_next):
+        # 跳过登录相关的API
+        if request.url.path in ["/login", "/logout"]:
+            return await call_next(request)
+
+        # 检查是否为API路由
+        if request.url.path.startswith("/api/"):
+            # 检查是否已认证
+            if not request.session.get("authenticated"):
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "error": "未认证",
+                        "message": "请先登录系统",
+                        "code": "UNAUTHORIZED"
+                    }
+                )
+
+        # 继续处理请求
+        response = await call_next(request)
+        return response
+
+# 添加API认证中间件
+app.add_middleware(APIAuthMiddleware)
+
+# 挂载静态文件
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+# 将templates保存到config中供auth模块使用
+config.templates = templates
+
+# 注册认证路由
+app.include_router(auth_router, tags=["认证"])
 
 
 def get_signal_name(signal_type: str) -> str:
@@ -80,24 +132,36 @@ def _get_macd_params_display(etf: dict) -> dict:
 @app.get("/", response_class=HTMLResponse)
 async def index_page(request: Request):
     """Home page - 批量展示策略、持仓、下个交易日操作"""
+    auth_check = await require_auth(request)
+    if auth_check:
+        return auth_check
     return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.get("/macd-watchlist", response_class=HTMLResponse)
 async def macd_watchlist_page(request: Request):
     """MACD Strategy watchlist page with split-view layout."""
+    auth_check = await require_auth(request)
+    if auth_check:
+        return auth_check
     return templates.TemplateResponse("macd_watchlist.html", {"request": request})
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     """System settings page."""
+    auth_check = await require_auth(request)
+    if auth_check:
+        return auth_check
     return templates.TemplateResponse("settings.html", {"request": request})
 
 
 @app.get("/profit", response_class=HTMLResponse)
 async def profit_page(request: Request):
     """Profit summary page - 所有ETF汇总收益"""
+    auth_check = await require_auth(request)
+    if auth_check:
+        return auth_check
     return templates.TemplateResponse("profit.html", {"request": request})
 
 

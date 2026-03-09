@@ -16,20 +16,20 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# 导入统一的日志配置
+from core.logging_config import setup_logger
+
 # 配置日志
 LOG_DIR = Path(__file__).parent.parent / 'logs'
 LOG_DIR.mkdir(exist_ok=True)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler(LOG_DIR / 'data_update_scheduler.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
+# 使用轮转日志：单个文件最大10MB，保留5个备份
+logger = setup_logger(
+    name='data_update_scheduler',
+    log_file=LOG_DIR / 'data_update_scheduler.log',
+    max_bytes=10 * 1024 * 1024,  # 10MB
+    backup_count=5
 )
-
-logger = logging.getLogger(__name__)
 
 
 class DataUpdateScheduler:

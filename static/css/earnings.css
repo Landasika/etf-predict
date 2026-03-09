@@ -82,6 +82,15 @@ body {
     border-radius: 20px;
 }
 
+.nav-links .logout-link {
+    color: #fca5a5 !important;
+}
+
+.nav-links .logout-link:hover {
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: #fff !important;
+}
+
 /* Main Content */
 .main-content {
     padding: 30px;

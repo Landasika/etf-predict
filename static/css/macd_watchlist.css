@@ -95,6 +95,15 @@ body {
     color: white;
 }
 
+.nav-links .logout-link {
+    color: #fca5a5 !important;
+}
+
+.nav-links .logout-link:hover {
+    background: rgba(239, 68, 68, 0.2) !important;
+    color: #ef4444 !important;
+}
+
 /* 主容器 - 左右分栏 */
 .main-container {
     display: flex;
