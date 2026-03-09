@@ -8,6 +8,46 @@ let currentEtfCode = null;
 let currentStrategy = null;
 let watchlistData = null;
 let backtestChart = null;
+
+// API请求辅助函数 - 处理认证和错误
+async function fetchAPI(url, options = {}) {
+    const response = await fetch(url, options);
+
+    // 检查是否为401未认证
+    if (response.status === 401) {
+        // 尝试解析响应内容
+        let errorMsg = '未认证，请先登录';
+        try {
+            const data = await response.json();
+            errorMsg = data.message || errorMsg;
+        } catch (e) {
+            // 如果无法解析JSON，使用默认消息
+        }
+
+        // 跳转到登录页面
+        alert(errorMsg);
+        window.location.href = '/login';
+        throw new Error(errorMsg);
+    }
+
+    // 检查其他错误状态
+    if (!response.ok) {
+        let errorMsg = `请求失败 (${response.status})`;
+        try {
+            const data = await response.json();
+            errorMsg = data.message || data.error || errorMsg;
+        } catch (e) {
+            // 如果无法解析JSON，尝试获取文本
+            const text = await response.text();
+            if (text) {
+                errorMsg = `服务器错误: ${text.substring(0, 100)}`;
+            }
+        }
+        throw new Error(errorMsg);
+    }
+
+    return response.json();
+}
 let klineChart = null;
 let positionHistoryChart = null;  // 仓位历史图表
 let profitCurveChart = null;  // 收益曲线图表

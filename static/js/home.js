@@ -1,11 +1,51 @@
 // 首页策略汇总
-console.log('📝 home.js v74 已加载');
+console.log('📝 home.js v75 已加载');
 
 // 实时更新控制
 let realtimeEnabled = false;
 let realtimeRefreshInterval = null;
 let realtimeCountdownInterval = null;  // 倒计时定时器
 let nextRefreshTime = null;  // 下次刷新时间
+
+// API请求辅助函数 - 处理认证和错误
+async function fetchAPI(url, options = {}) {
+    const response = await fetch(url, options);
+
+    // 检查是否为401未认证
+    if (response.status === 401) {
+        // 尝试解析响应内容
+        let errorMsg = '未认证，请先登录';
+        try {
+            const data = await response.json();
+            errorMsg = data.message || errorMsg;
+        } catch (e) {
+            // 如果无法解析JSON，使用默认消息
+        }
+
+        // 跳转到登录页面
+        alert(errorMsg);
+        window.location.href = '/login';
+        throw new Error(errorMsg);
+    }
+
+    // 检查其他错误状态
+    if (!response.ok) {
+        let errorMsg = `请求失败 (${response.status})`;
+        try {
+            const data = await response.json();
+            errorMsg = data.message || data.error || errorMsg;
+        } catch (e) {
+            // 如果无法解析JSON，尝试获取文本
+            const text = await response.text();
+            if (text) {
+                errorMsg = `服务器错误: ${text.substring(0, 100)}`;
+            }
+        }
+        throw new Error(errorMsg);
+    }
+
+    return response.json();
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ DOMContentLoaded 事件触发');
@@ -37,12 +77,10 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.disabled = true;
             btn.innerHTML = '⏳ 刷新中...';
 
-            // 调用刷新缓存API
-            const response = await fetch('/api/watchlist/refresh-cache', {
+            // 调用刷新缓存API（使用fetchAPI辅助函数）
+            const result = await fetchAPI('/api/watchlist/refresh-cache', {
                 method: 'POST'
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 // 刷新成功后重新加载数据（强制刷新，跳过缓存）
@@ -58,7 +96,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (error) {
             console.error('刷新缓存失败:', error);
-            alert('刷新缓存失败: ' + error.message);
+            // 如果是认证错误，不显示额外的alert（fetchAPI已经处理了）
+            if (!error.message.includes('未认证')) {
+                alert('刷新缓存失败: ' + error.message);
+            }
         } finally {
             // 恢复按钮状态
             btn.disabled = false;

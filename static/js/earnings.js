@@ -1,5 +1,5 @@
 // 收益汇总页面
-console.log('📝 earnings.js v9 已加载 - 添加切换调试信息');
+console.log('📝 earnings.js v10 已加载 - 添加认证支持');
 
 // 收益日历相关
 let allProfitCalendarData = [];  // 存储所有ETF的日收益数据
@@ -10,6 +10,46 @@ let currentCalendarView = 'daily';  // 日历视图：daily 或 monthly
 let allTimelineData = [];  // 存储完整的时间线数据
 let dailyTimelineData = [];  // 存储日度数据
 let monthlyProfitData = [];  // 存储月度汇总数据
+
+// API请求辅助函数 - 处理认证和错误
+async function fetchAPI(url, options = {}) {
+    const response = await fetch(url, options);
+
+    // 检查是否为401未认证
+    if (response.status === 401) {
+        // 尝试解析响应内容
+        let errorMsg = '未认证，请先登录';
+        try {
+            const data = await response.json();
+            errorMsg = data.message || errorMsg;
+        } catch (e) {
+            // 如果无法解析JSON，使用默认消息
+        }
+
+        // 跳转到登录页面
+        alert(errorMsg);
+        window.location.href = '/login';
+        throw new Error(errorMsg);
+    }
+
+    // 检查其他错误状态
+    if (!response.ok) {
+        let errorMsg = `请求失败 (${response.status})`;
+        try {
+            const data = await response.json();
+            errorMsg = data.message || data.error || errorMsg;
+        } catch (e) {
+            // 如果无法解析JSON，尝试获取文本
+            const text = await response.text();
+            if (text) {
+                errorMsg = `服务器错误: ${text.substring(0, 100)}`;
+            }
+        }
+        throw new Error(errorMsg);
+    }
+
+    return response.json();
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ DOMContentLoaded 事件触发');
