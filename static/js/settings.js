@@ -504,6 +504,32 @@ async function loadFeishuConfig() {
     } catch (error) {
         console.error('Error loading Feishu config:', error);
     }
+
+    // Load Feishu notification scheduler config
+    try {
+        const data = await fetchAPI('/api/data-update/scheduler/status');
+
+        if (data.success) {
+            const status = data.data;
+            const feishuNotif = status.feishu_notification || {};
+
+            // Load enabled status
+            const notifEnabledCheckbox = document.getElementById('feishuNotificationEnabled');
+            if (notifEnabledCheckbox) {
+                notifEnabledCheckbox.checked = feishuNotif.enabled || false;
+            }
+
+            // Load notification times
+            const timesInput = document.getElementById('feishuNotificationTimes');
+            if (timesInput && feishuNotif.times) {
+                timesInput.value = feishuNotif.times.join(',');
+            }
+
+            console.log('Feishu notification scheduler loaded:', feishuNotif);
+        }
+    } catch (error) {
+        console.error('Error loading Feishu notification scheduler:', error);
+    }
 }
 
 // Render Feishu bots list
@@ -778,9 +804,73 @@ async function saveFeishuSettings() {
         // Save config
         await saveFeishuConfig(feishuConfig);
 
+        // Save Feishu notification scheduler settings
+        await saveFeishuNotificationSettings();
+
         showToast('飞书配置已保存');
     } catch (error) {
         console.error('Error saving Feishu settings:', error);
         showToast('保存失败: ' + error.message, 'error');
+    }
+}
+
+// Save Feishu notification scheduler settings
+async function saveFeishuNotificationSettings() {
+    try {
+        const enabled = document.getElementById('feishuNotificationEnabled')?.checked || false;
+        const timesInput = document.getElementById('feishuNotificationTimes')?.value || '';
+        const times = timesInput.split(',').map(t => t.trim()).filter(t => t);
+
+        if (times.length === 0 && enabled) {
+            showToast('请设置至少一个发送时间', 'error');
+            return;
+        }
+
+        // Validate time format
+        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+        for (const time of times) {
+            if (!timeRegex.test(time)) {
+                showToast(`无效的时间格式: ${time}，请使用 HH:MM 格式`, 'error');
+                return;
+            }
+        }
+
+        const data = await fetchAPI('/api/feishu/notification/configure', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                enabled: enabled,
+                times: times
+            })
+        });
+
+        if (data.success) {
+            console.log('Feishu notification scheduler settings saved');
+        } else {
+            throw new Error(data.message || '保存失败');
+        }
+    } catch (error) {
+        console.error('Error saving Feishu notification settings:', error);
+        throw error;
+    }
+}
+
+// Trigger Feishu notification immediately
+async function triggerFeishuNotification() {
+    try {
+        const data = await fetchAPI('/api/feishu/notification/trigger', {
+            method: 'POST'
+        });
+
+        if (data.success) {
+            showToast('飞书消息发送任务已启动');
+        } else {
+            throw new Error(data.message || '发送失败');
+        }
+    } catch (error) {
+        console.error('Error triggering Feishu notification:', error);
+        showToast('发送失败: ' + error.message, 'error');
     }
 }

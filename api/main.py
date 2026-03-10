@@ -1481,6 +1481,66 @@ async def trigger_update():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/feishu/notification/configure")
+async def configure_feishu_notification(request: Request):
+    """配置飞书消息定时发送
+
+    Body:
+        enabled: bool 是否启用
+        times: list 发送时间列表 ["HH:MM", "HH:MM", ...]
+    """
+    try:
+        from core.data_update_scheduler import get_scheduler
+        scheduler = get_scheduler()
+
+        data = await request.json()
+        enabled = data.get('enabled', False)
+        times = data.get('times', ["09:40", "10:40", "11:40", "13:40", "14:40"])
+
+        # 设置飞书消息发送时间
+        if not scheduler.set_feishu_notification_times(times):
+            raise HTTPException(status_code=400, detail='无效的时间格式，请使用 HH:MM 格式')
+
+        # 启用/禁用飞书消息发送
+        scheduler.set_feishu_notification_enabled(enabled)
+
+        return {
+            'success': True,
+            'message': '飞书消息定时发送配置已更新',
+            'data': scheduler.get_status()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/feishu/notification/trigger")
+async def trigger_feishu_notification():
+    """立即触发一次飞书消息发送"""
+    try:
+        from core.data_update_scheduler import get_scheduler
+        scheduler = get_scheduler()
+
+        if scheduler.feishu_notification_status['is_sending']:
+            return {
+                'success': False,
+                'message': '飞书消息正在发送中，请稍后再试'
+            }
+
+        # 在新线程中执行发送
+        import threading
+        thread = threading.Thread(target=scheduler._send_feishu_notification, daemon=True)
+        thread.start()
+
+        return {
+            'success': True,
+            'message': '已启动飞书消息发送任务'
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/data-update/trigger")
 async def trigger_data_update(background_tasks: BackgroundTasks):
     """手动触发数据更新（独立API，不依赖调度器）

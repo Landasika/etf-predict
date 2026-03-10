@@ -57,6 +57,17 @@ class DataUpdateScheduler:
         self.realtime_updater = None
         self.realtime_enabled = False
 
+        # 飞书消息定时发送配置
+        self.feishu_notification_enabled = False
+        self.feishu_notification_times = ["09:40", "10:40", "11:40", "13:40", "14:40"]
+        self.feishu_notification_status = {
+            'is_sending': False,
+            'last_send': None,
+            'last_result': None,
+            'success_count': 0,
+            'fail_count': 0
+        }
+
     def set_realtime_enabled(self, enabled: bool):
         """启用/禁用实时更新
 
@@ -118,6 +129,125 @@ class DataUpdateScheduler:
         else:
             logger.warning("实时更新器未初始化")
             return False
+
+    def set_feishu_notification_times(self, times: list) -> bool:
+        """设置飞书消息发送时间
+
+        Args:
+            times: 时间列表，格式 ["HH:MM", "HH:MM", ...]
+
+        Returns:
+            bool: 是否设置成功
+        """
+        try:
+            # 验证时间格式
+            validated_times = []
+            for time_str in times:
+                datetime.strptime(time_str, '%H:%M')
+                validated_times.append(time_str)
+
+            self.feishu_notification_times = validated_times
+            logger.info(f"飞书消息发送时间已设置为: {', '.join(validated_times)}")
+
+            # 如果调度器正在运行，重新调度
+            if self.is_running:
+                self._reschedule()
+
+            return True
+        except ValueError as e:
+            logger.error(f"无效的时间格式: {e}")
+            return False
+
+    def set_feishu_notification_enabled(self, enabled: bool):
+        """启用/禁用飞书消息定时发送
+
+        Args:
+            enabled: True启用，False禁用
+        """
+        self.feishu_notification_enabled = enabled
+        logger.info(f"飞书消息定时发送已{'启用' if enabled else '禁用'}")
+
+        # 如果调度器正在运行，重新调度
+        if self.is_running:
+            self._reschedule()
+
+    def _send_feishu_notification(self):
+        """发送飞书消息任务"""
+        logger.info("=" * 60)
+        logger.info("📱 开始执行飞书消息发送任务")
+        logger.info("=" * 60)
+
+        self.feishu_notification_status['is_sending'] = True
+
+        try:
+            from core.feishu_notifier import get_feishu_notifier
+
+            notifier = get_feishu_notifier()
+
+            # 获取自选列表数据
+            from core.database import get_db_session
+            from core.watchlist import load_watchlist
+            from sqlalchemy import text
+
+            watchlist = load_watchlist()
+            if not watchlist:
+                logger.warning("⚠️  自选列表为空，跳过飞书消息发送")
+                self.feishu_notification_status['last_result'] = '跳过（自选列表为空）'
+                return
+
+            # 获取数据
+            with get_db_session() as session:
+                etf_codes = list(watchlist.keys())
+
+                # 构建消息
+                message_lines = ["📊 ETF交易建议\n"]
+                message_lines.append(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+                for etf_code in etf_codes[:10]:  # 最多显示10个
+                    try:
+                        # 获取最新信号
+                        query = text("""
+                            SELECT name, close, change_pct
+                            FROM etf_daily
+                            WHERE ts_code = :code
+                            ORDER BY trade_date DESC
+                            LIMIT 1
+                        """)
+                        result = session.execute(query, {"code": etf_code}).fetchone()
+
+                        if result:
+                            name, close, change_pct = result
+                            change_str = f"+{change_pct:.2f}%" if change_pct >= 0 else f"{change_pct:.2f}%"
+                            emoji = "🟢" if change_pct >= 0 else "🔴"
+                            message_lines.append(f"{emoji} {name} ({etf_code})")
+                            message_lines.append(f"   价格: {close:.3f}  涨跌: {change_str}\n")
+                    except Exception as e:
+                        logger.error(f"获取 {etf_code} 数据失败: {e}")
+
+                message_lines.append("\n💡 详细信息请访问系统查看")
+
+                message = "".join(message_lines)
+
+            # 发送消息
+            import asyncio
+            result = asyncio.run(notifier.send_message(message))
+
+            self.feishu_notification_status['last_send'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.feishu_notification_status['last_result'] = '成功' if result else '失败'
+
+            if result:
+                self.feishu_notification_status['success_count'] += 1
+                logger.info("✅ 飞书消息发送成功")
+            else:
+                self.feishu_notification_status['fail_count'] += 1
+                logger.warning("⚠️  飞书消息发送失败")
+
+        except Exception as e:
+            logger.error(f"❌ 飞书消息发送失败: {e}")
+            self.feishu_notification_status['last_result'] = f'失败: {str(e)}'
+            self.feishu_notification_status['fail_count'] += 1
+        finally:
+            self.feishu_notification_status['is_sending'] = False
 
     def set_update_time(self, time_str):
         """设置更新时间
@@ -190,7 +320,7 @@ class DataUpdateScheduler:
 
         # 如果启用，添加新任务
         if self.enabled:
-            # 每个工作日执行
+            # 每个工作日执行数据更新
             schedule.every().monday.at(self.update_time).do(self._run_update)
             schedule.every().tuesday.at(self.update_time).do(self._run_update)
             schedule.every().wednesday.at(self.update_time).do(self._run_update)
@@ -198,6 +328,17 @@ class DataUpdateScheduler:
             schedule.every().friday.at(self.update_time).do(self._run_update)
 
             logger.info(f"✅ 已调度更新任务: 每个工作日 {self.update_time}")
+
+        # 如果启用飞书消息发送，添加飞书消息任务
+        if self.feishu_notification_enabled:
+            for time_str in self.feishu_notification_times:
+                schedule.every().monday.at(time_str).do(self._send_feishu_notification)
+                schedule.every().tuesday.at(time_str).do(self._send_feishu_notification)
+                schedule.every().wednesday.at(time_str).do(self._send_feishu_notification)
+                schedule.every().thursday.at(time_str).do(self._send_feishu_notification)
+                schedule.every().friday.at(time_str).do(self._send_feishu_notification)
+
+            logger.info(f"✅ 已调度飞书消息任务: 每个工作日 {', '.join(self.feishu_notification_times)}")
 
     def _run_scheduler(self):
         """调度器运行循环"""
@@ -270,7 +411,12 @@ class DataUpdateScheduler:
             'is_running': self.is_running,
             'update_time': self.update_time,
             'next_run': next_run,
-            'update_status': self.update_status.copy()
+            'update_status': self.update_status.copy(),
+            'feishu_notification': {
+                'enabled': self.feishu_notification_enabled,
+                'times': self.feishu_notification_times.copy(),
+                'status': self.feishu_notification_status.copy()
+            }
         }
 
 

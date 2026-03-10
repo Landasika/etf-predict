@@ -201,6 +201,36 @@
                     </button>
                 </div>
 
+                <!-- 飞书消息定时发送 -->
+                <div class="setting-item">
+                    <label class="setting-label">
+                        启用定时消息发送
+                        <span class="setting-desc">在指定时间自动发送ETF交易建议到飞书</span>
+                    </label>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="feishuNotificationEnabled">
+                        <label for="feishuNotificationEnabled" class="toggle"></label>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">
+                        消息发送时间
+                        <span class="setting-desc">多个时间点用逗号分隔，格式 HH:MM</span>
+                    </label>
+                    <input type="text" id="feishuNotificationTimes" class="setting-input"
+                           placeholder="09:40,10:40,11:40,13:40,14:40"
+                           value="09:40,10:40,11:40,13:40,14:40">
+                    <span class="setting-hint">建议在每个交易时段收盘后发送</span>
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">立即发送测试消息</label>
+                    <button class="btn btn-secondary" onclick="triggerFeishuNotification()">
+                        📤 发送飞书消息
+                    </button>
+                </div>
+
                 <!-- 通知类型 -->
                 <div class="setting-item">
                     <label class="setting-label">通知类型</label>
