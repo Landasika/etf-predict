@@ -25,12 +25,12 @@ if __name__ == '__main__':
         print(f"⚠️  调度器加载失败: {e}")
 
     print(f"""
-    =====================================
-    ETF预测系统启动中...
-    =====================================
-    API地址: http://{config.API_HOST}:{config.API_PORT}
-    文档地址: http://{config.API_HOST}:{config.API_PORT}/docs
-    =====================================
+=====================================
+ETF预测系统启动中...
+=====================================
+API地址: http://{config.API_HOST}:{config.API_PORT}
+文档地址: http://{config.API_HOST}:{config.API_PORT}/docs
+=====================================
     """)
     uvicorn.run(
         app,
