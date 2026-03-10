@@ -16,11 +16,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
 from core.database import get_etf_info
-from core.auth import router as auth_router, require_auth
+from core.auth import router as auth_router
 
 app = FastAPI(title=config.API_TITLE, version=config.API_VERSION)
 
-# 添加会话中间件（用于认证）- 必须最先添加
+# 导入必要的模块
+from starlette.responses import JSONResponse
+
+# 添加会话中间件（用于认证）
+# 注意：SessionMiddleware必须在所有其他中间件之前添加
 app.add_middleware(
     SessionMiddleware,
     secret_key=config.SESSION_SECRET_KEY,
@@ -29,63 +33,44 @@ app.add_middleware(
     https_only=False  # 生产环境建议设置为True
 )
 
-# API认证中间件 - 使用装饰器方式确保在SessionMiddleware之后执行
-from starlette.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-
-class APIAuthMiddleware(BaseHTTPMiddleware):
-    """API路由认证中间件
-
-    对所有 /api/* 路由进行身份验证
-    必须在 SessionMiddleware 之后执行
-    """
-    async def dispatch(self, request, call_next):
-        # 跳过登录相关的API
-        if request.url.path in ["/login", "/logout"]:
-            return await call_next(request)
-
-        # 检查是否为API路由
-        if request.url.path.startswith("/api/"):
-            # 检查session是否可用
-            if "session" not in request.scope:
-                return JSONResponse(
-                    status_code=500,
-                    content={
-                        "error": "服务器配置错误",
-                        "message": "Session中间件未正确配置",
-                        "code": "CONFIG_ERROR"
-                    }
-                )
-
-            # 检查是否已认证
-            if not request.session.get("authenticated"):
-                return JSONResponse(
-                    status_code=401,
-                    content={
-                        "error": "未认证",
-                        "message": "请先登录系统",
-                        "code": "UNAUTHORIZED"
-                    }
-                )
-
-        # 继续处理请求
-        response = await call_next(request)
-        return response
-
-# 添加API认证中间件 - 必须在SessionMiddleware之后添加
-# 但由于BaseHTTPMiddleware的特殊性，需要特殊处理
+# API认证中间件
+# 使用@app.middleware装饰器确保在SessionMiddleware之后执行
 @app.middleware("http")
 async def api_auth_middleware(request, call_next):
-    """API认证中间件函数
+    """API和页面路由认证中间件
 
-    使用装饰器形式确保在SessionMiddleware之后执行
+    认证规则:
+    - 静态文件(/static/*): 不需要认证
+    - 登录页面(/login, /logout POST): 不需要认证
+    - 页面路由(/, /macd-watchlist, /profit, /settings): 需要认证，未认证则重定向
+    - API路由(/api/*): 需要认证，未认证则返回401 JSON
     """
-    # 跳过登录相关的API
-    if request.url.path in ["/login", "/logout"]:
+    path = request.url.path
+
+    # 1. 静态文件 - 不需要认证
+    if path.startswith("/static/"):
         return await call_next(request)
 
-    # 检查是否为API路由
-    if request.url.path.startswith("/api/"):
+    # 2. 登录相关路由 - 不需要认证
+    if path in ["/login", "/logout"] or (path.startswith("/login") or path.startswith("/logout")):
+        return await call_next(request)
+
+    # 3. 页面路由 - 需要认证，未认证则重定向
+    page_routes = ["/", "/macd-watchlist", "/profit", "/settings"]
+    if path in page_routes or path in ["/macd-watchlist/", "/profit/", "/settings/"]:
+        # 检查是否已认证
+        if not request.session.get("authenticated"):
+            # 保存原始URL用于登录后跳转
+            request.session["redirect_after_login"] = path
+            return JSONResponse(
+                status_code=302,
+                headers={"Location": "/login"},
+                content={"redirect": "/login"}
+            )
+        return await call_next(request)
+
+    # 4. API路由 - 需要认证，未认证则返回401
+    if path.startswith("/api/"):
         # 检查是否已认证
         if not request.session.get("authenticated"):
             return JSONResponse(
@@ -96,10 +81,10 @@ async def api_auth_middleware(request, call_next):
                     "code": "UNAUTHORIZED"
                 }
             )
+        return await call_next(request)
 
-    # 继续处理请求
-    response = await call_next(request)
-    return response
+    # 5. 其他路由 - 正常处理
+    return await call_next(request)
 
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -170,27 +155,18 @@ def _get_macd_params_display(etf: dict) -> dict:
 @app.get("/", response_class=HTMLResponse)
 async def index_page(request: Request):
     """Home page - 批量展示策略、持仓、下个交易日操作"""
-    auth_check = await require_auth(request)
-    if auth_check:
-        return auth_check
     return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.get("/macd-watchlist", response_class=HTMLResponse)
 async def macd_watchlist_page(request: Request):
     """MACD Strategy watchlist page with split-view layout."""
-    auth_check = await require_auth(request)
-    if auth_check:
-        return auth_check
     return templates.TemplateResponse("macd_watchlist.html", {"request": request})
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     """System settings page."""
-    auth_check = await require_auth(request)
-    if auth_check:
-        return auth_check
     return templates.TemplateResponse("settings.html", {"request": request})
 
 

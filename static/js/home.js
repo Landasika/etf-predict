@@ -1,5 +1,5 @@
 // 首页策略汇总
-console.log('📝 home.js v75 已加载');
+console.log('📝 home.js v76 已加载 - 修复session和鉴权问题');
 
 // 实时更新控制
 let realtimeEnabled = false;
@@ -183,8 +183,7 @@ let strategyData = [];
 async function loadBatchSignals(forceRefresh = false) {
     try {
         const url = forceRefresh ? '/api/watchlist/batch-signals?refresh=true' : '/api/watchlist/batch-signals';
-        const response = await fetch(url);
-        const result = await response.json();
+        const result = await fetchAPI(url);
 
         if (result.success) {
             strategyData = result.data;
@@ -202,7 +201,10 @@ async function loadBatchSignals(forceRefresh = false) {
         }
     } catch (error) {
         console.error('加载信号数据失败:', error);
-        showError('加载信号数据失败');
+        // 如果是认证错误，不显示额外的错误提示（fetchAPI已经处理了跳转）
+        if (!error.message.includes('未认证')) {
+            showError('加载信号数据失败');
+        }
     }
 }
 
@@ -660,8 +662,7 @@ async function removeEtf(etfCode) {
 // 加载数据日期
 async function loadDataDate() {
     try {
-        const response = await fetch('/api/data/latest-date');
-        const result = await response.json();
+        const result = await fetchAPI('/api/data/latest-date');
 
         if (result.success && result.latest_date) {
             // 格式化日期显示
@@ -675,7 +676,10 @@ async function loadDataDate() {
         }
     } catch (error) {
         console.error('加载数据日期失败:', error);
-        document.getElementById('dataDate').textContent = '加载失败';
+        // 认证错误已经在fetchAPI中处理
+        if (!error.message.includes('未认证')) {
+            document.getElementById('dataDate').textContent = '加载失败';
+        }
     }
 }
 
