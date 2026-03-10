@@ -44,6 +44,12 @@
 ### 部署运维
 - [DEPLOYMENT.md](../DEPLOYMENT.md) - 部署指南（开发/生产/Docker）
 
+### 认证与安全
+- [AUTHENTICATION.md](AUTHENTICATION.md) - 身份认证使用指南
+- [FINAL_FIX.md](FINAL_FIX.md) - Session和鉴权修复说明
+- [TROUBLESHOOTING_QUICK.md](TROUBLESHOOTING_QUICK.md) - 快速故障排除
+- [LOG_MANAGEMENT.md](LOG_MANAGEMENT.md) - 日志管理
+
 ---
 
 ## 📊 用户文档
