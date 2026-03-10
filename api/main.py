@@ -21,10 +21,68 @@ from core.auth import router as auth_router
 app = FastAPI(title=config.API_TITLE, version=config.API_VERSION)
 
 # 导入必要的模块
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
+from starlette.middleware.base import BaseHTTPMiddleware
 
-# 添加会话中间件（用于认证）
-# 注意：SessionMiddleware必须在所有其他中间件之前添加
+# 定义认证中间件类
+class AuthMiddleware(BaseHTTPMiddleware):
+    """认证中间件
+
+    处理所有路由的认证检查：
+    - 静态文件: 无需认证
+    - 登录路由: 无需认证
+    - 页面路由: 需要认证，未认证则重定向
+    - API路由: 需要认证，未认证则401
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+
+        # 1. 静态文件 - 不需要认证
+        if path.startswith("/static/"):
+            return await call_next(request)
+
+        # 2. 登录相关路由 - 不需要认证
+        if path in ["/login", "/logout"] or path.startswith("/login") or path.startswith("/logout"):
+            return await call_next(request)
+
+        # 3. 检查session是否可用
+        if "session" not in request.scope:
+            # Session未配置，允许继续（可能有其他中间件处理）
+            return await call_next(request)
+
+        # 4. 页面路由 - 需要认证，未认证则重定向
+        page_routes = ["/", "/macd-watchlist", "/profit", "/settings"]
+        if path in page_routes or path.endswith("/"):
+            if not request.session.get("authenticated"):
+                # 保存原始URL用于登录后跳转
+                request.session["redirect_after_login"] = path
+                # 使用 RedirectResponse
+                from starlette.responses import RedirectResponse
+                return RedirectResponse(url="/login", status_code=302)
+            return await call_next(request)
+
+        # 5. API路由 - 需要认证，未认证则返回401
+        if path.startswith("/api/"):
+            if not request.session.get("authenticated"):
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "error": "未认证",
+                        "message": "请先登录系统",
+                        "code": "UNAUTHORIZED"
+                    }
+                )
+            return await call_next(request)
+
+        # 6. 其他路由 - 正常处理
+        return await call_next(request)
+
+# 添加中间件（注意顺序：后添加的先执行）
+# 1. 先添加认证中间件（会后执行）
+app.add_middleware(AuthMiddleware)
+
+# 2. 最后添加SessionMiddleware（会先执行，确保session可用）
 app.add_middleware(
     SessionMiddleware,
     secret_key=config.SESSION_SECRET_KEY,
@@ -32,59 +90,6 @@ app.add_middleware(
     same_site="lax",  # CSRF保护
     https_only=False  # 生产环境建议设置为True
 )
-
-# API认证中间件
-# 使用@app.middleware装饰器确保在SessionMiddleware之后执行
-@app.middleware("http")
-async def api_auth_middleware(request, call_next):
-    """API和页面路由认证中间件
-
-    认证规则:
-    - 静态文件(/static/*): 不需要认证
-    - 登录页面(/login, /logout POST): 不需要认证
-    - 页面路由(/, /macd-watchlist, /profit, /settings): 需要认证，未认证则重定向
-    - API路由(/api/*): 需要认证，未认证则返回401 JSON
-    """
-    path = request.url.path
-
-    # 1. 静态文件 - 不需要认证
-    if path.startswith("/static/"):
-        return await call_next(request)
-
-    # 2. 登录相关路由 - 不需要认证
-    if path in ["/login", "/logout"] or (path.startswith("/login") or path.startswith("/logout")):
-        return await call_next(request)
-
-    # 3. 页面路由 - 需要认证，未认证则重定向
-    page_routes = ["/", "/macd-watchlist", "/profit", "/settings"]
-    if path in page_routes or path in ["/macd-watchlist/", "/profit/", "/settings/"]:
-        # 检查是否已认证
-        if not request.session.get("authenticated"):
-            # 保存原始URL用于登录后跳转
-            request.session["redirect_after_login"] = path
-            return JSONResponse(
-                status_code=302,
-                headers={"Location": "/login"},
-                content={"redirect": "/login"}
-            )
-        return await call_next(request)
-
-    # 4. API路由 - 需要认证，未认证则返回401
-    if path.startswith("/api/"):
-        # 检查是否已认证
-        if not request.session.get("authenticated"):
-            return JSONResponse(
-                status_code=401,
-                content={
-                    "error": "未认证",
-                    "message": "请先登录系统",
-                    "code": "UNAUTHORIZED"
-                }
-            )
-        return await call_next(request)
-
-    # 5. 其他路由 - 正常处理
-    return await call_next(request)
 
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="static"), name="static")
