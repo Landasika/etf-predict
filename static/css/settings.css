@@ -449,3 +449,104 @@ input:checked + .toggle:before {
         width: 100%;
     }
 }
+
+/* ==================== 飞书通知配置 ==================== */
+
+#feishuBotsContainer {
+    margin-top: 20px;
+}
+
+#feishuBotsContainer h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 15px;
+}
+
+.feishu-bot-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 15px;
+    background: #f9fafb;
+}
+
+.feishu-bot-card .bot-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.feishu-bot-card .bot-name-input {
+    flex: 1;
+}
+
+.feishu-bot-card .bot-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.feishu-bot-card .bot-field {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.feishu-bot-card .bot-field label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #6b7280;
+}
+
+.feishu-bot-card .bot-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 14px;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #dc2626;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+.notification-types {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+}
+
+.notification-type-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    background: #f9fafb;
+    border-radius: 6px;
+}
+
+.notification-type-item input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+}
+
+.notification-type-item label {
+    font-size: 14px;
+    color: #374151;
+    cursor: pointer;
+    user-select: none;
+}

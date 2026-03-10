@@ -120,6 +120,66 @@
                 </div>
             </section>
 
+            <!-- 飞书通知配置 -->
+            <section class="setting-section">
+                <h2>📱 飞书通知配置</h2>
+
+                <div class="setting-item">
+                    <label class="setting-label">
+                        启用飞书通知
+                        <span class="setting-desc">策略信号、数据更新等消息推送</span>
+                    </label>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="feishuEnabled">
+                        <label for="feishuEnabled" class="toggle"></label>
+                    </div>
+                </div>
+
+                <!-- 飞书机器人列表 -->
+                <div id="feishuBotsContainer">
+                    <h3>飞书机器人</h3>
+                    <div id="feishuBotsList"></div>
+                    <button class="btn btn-secondary" onclick="addFeishuBot()" style="margin-top: 10px;">
+                        ➕ 添加机器人
+                    </button>
+                </div>
+
+                <!-- 通知类型 -->
+                <div class="setting-item">
+                    <label class="setting-label">通知类型</label>
+                    <div class="notification-types">
+                        <div class="notification-type-item">
+                            <input type="checkbox" id="notifySignals" checked>
+                            <label for="notifySignals">策略信号提醒</label>
+                        </div>
+                        <div class="notification-type-item">
+                            <input type="checkbox" id="notifyDataUpdates">
+                            <label for="notifyDataUpdates">数据更新通知</label>
+                        </div>
+                        <div class="notification-type-item">
+                            <input type="checkbox" id="notifyBacktest">
+                            <label for="notifyBacktest">回测完成通知</label>
+                        </div>
+                        <div class="notification-type-item">
+                            <input type="checkbox" id="notifyErrors" checked>
+                            <label for="notifyErrors">错误告警</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 测试连接 -->
+                <div class="setting-item">
+                    <label class="setting-label">测试连接</label>
+                    <div class="setting-input-group">
+                        <select id="feishuTestBot" class="setting-select">
+                            <option value="">选择机器人</option>
+                        </select>
+                        <input type="text" id="feishuTestMessage" class="setting-input" placeholder="测试消息（可选）" value="这是一条测试消息">
+                        <button class="btn btn-secondary" onclick="testFeishuConnection()">发送测试</button>
+                    </div>
+                </div>
+            </section>
+
             <!-- 操作按钮 -->
             <section class="action-buttons">
                 <button class="btn btn-secondary" onclick="loadSettings()">↺️ 重置</button>

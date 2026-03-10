@@ -1992,6 +1992,105 @@ async def test_token(request: Request):
         raise HTTPException(status_code=500, detail=f'测试Token失败: {str(e)}')
 
 
+# ==================== 飞书通知配置 ====================
+
+@app.get("/api/feishu/config")
+async def get_feishu_config():
+    """获取飞书通知配置"""
+    from core.feishu_notifier import get_feishu_notifier
+
+    notifier = get_feishu_notifier()
+    return {
+        'success': True,
+        'data': notifier.get_config()
+    }
+
+
+@app.post("/api/feishu/config")
+async def update_feishu_config(request: Request):
+    """更新飞书通知配置"""
+    from core.feishu_notifier import get_feishu_notifier
+
+    try:
+        data = await request.json()
+        notifier = get_feishu_notifier()
+
+        success = notifier.update_config(data)
+        if success:
+            return {
+                'success': True,
+                'message': '飞书配置已更新'
+            }
+        else:
+            raise HTTPException(status_code=500, detail='更新配置失败')
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'更新飞书配置失败: {str(e)}')
+
+
+@app.post("/api/feishu/test")
+async def test_feishu_connection(request: Request):
+    """测试飞书连接"""
+    from core.feishu_notifier import get_feishu_notifier
+
+    try:
+        data = await request.json()
+        bot_id = data.get('bot_id')
+        test_message = data.get('message', '这是一条测试消息')
+
+        notifier = get_feishu_notifier()
+        success = await notifier.send_message(f"🔔 飞书连接测试\n\n{test_message}", bot_id)
+
+        if success:
+            return {
+                'success': True,
+                'message': '测试消息发送成功'
+            }
+        else:
+            return {
+                'success': False,
+                'message': '发送失败，请检查配置'
+            }
+    except Exception as e:
+        return {
+            'success': False,
+            'message': f'测试失败: {str(e)}'
+        }
+
+
+@app.post("/api/feishu/send")
+async def send_feishu_message(request: Request):
+    """手动发送飞书消息"""
+    from core.feishu_notifier import get_feishu_notifier
+
+    try:
+        data = await request.json()
+        message = data.get('message', '')
+        bot_id = data.get('bot_id')
+
+        if not message:
+            raise HTTPException(status_code=400, detail='消息内容不能为空')
+
+        notifier = get_feishu_notifier()
+        success = await notifier.send_message(message, bot_id)
+
+        if success:
+            return {
+                'success': True,
+                'message': '消息发送成功'
+            }
+        else:
+            return {
+                'success': False,
+                'message': '发送失败'
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'发送消息失败: {str(e)}')
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host=config.API_HOST, port=config.API_PORT)
