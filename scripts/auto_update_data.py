@@ -52,19 +52,8 @@ MARKET_CLOSE_MINUTE = 5
 # ==================== 辅助函数 ====================
 
 def get_tushare_token():
-    """获取Tushare Token（优先从settings读取，fallback到config）"""
-    try:
-        from core.settings_manager import get_settings_manager
-        settings_mgr = get_settings_manager()
-        token = settings_mgr.settings.get('tushare', {}).get('token', '')
-
-        if token:
-            logger.info("✅ 从settings读取Tushare Token")
-            return token
-    except Exception as e:
-        logger.warning(f"从settings读取Token失败: {e}，fallback到config")
-
-    # Fallback到config
+    """获取Tushare Token（从config.json读取）"""
+    # 从config读取
     if config.TUSHARE_TOKEN:
         logger.info("✅ 从config读取Tushare Token")
         return config.TUSHARE_TOKEN

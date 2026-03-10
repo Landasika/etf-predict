@@ -157,6 +157,88 @@ pytest
 - 函数命名：snake_case
 - 类命名：PascalCase
 
+## 开发工作流
+
+本项目使用 **Linear + GitHub + Claude Code** 的工作流系统。
+
+### 项目跟踪配置
+
+- **Linear 团队**: Engineering (ENG)
+- **Linear 项目**: ETF-Predict
+- **Review 状态**: In Review
+
+### 自定义 Slash Commands
+
+项目配置了以下自定义命令来规范开发流程：
+
+1. **`/work-task ENG-{N}`** - 开始处理 Linear issue
+   - 检查依赖阻塞
+   - 验证 issue 质量（范围、验收标准）
+   - 创建功能分支
+   - 制定实施计划并等待批准
+
+2. **`/finish-task`** - 完成当前任务
+   - 运行所有质量检查
+   - 代码审查
+   - 创建 PR
+   - 更新 Linear 状态为 In Review
+
+3. **`/check-board`** - 检查项目面板
+   - 汇总各状态的 issue 数量
+   - 里程碑进度
+   - 风险识别
+   - 推荐接下来优先处理的 3 个 issue
+
+4. **`/create-issue [context]`** - 创建新 issue
+   - 从新发现的需求或阻塞创建后续 issue
+   - 自动推断并确认
+   - 设置依赖关系
+
+### 质量检查命令
+
+在创建 PR 之前，所有检查必须通过：
+
+```bash
+# 运行测试
+pytest tests/ -v
+
+# 类型检查
+mypy core/ strategies/ api/ optimization/ --strict
+
+# 代码风格检查
+ruff check .
+
+# 格式检查
+ruff format --check .
+```
+
+### 分支命名规范
+
+分支格式：`<prefix>/<issue-id-lowercase>-<slug>`
+
+- `feature/` - 新功能
+- `fix/` - Bug 修复
+- `cleanup/` - 重构或技术债务
+
+示例：`feature/eng-123-add-macd-indicator`
+
+### 提交信息格式
+
+`<summary> (ENG-{N})`
+
+示例：`添加 MACD 指标计算功能 (ENG-42)`
+
+### Pull Request 标准格式
+
+标题：`ENG-{N}: <concise summary>`
+
+Body 必须包含：
+- `Closes ENG-{N}`
+- 变更摘要
+- 验证步骤
+- 修改的文件列表
+- 关联的里程碑
+
 ## 添加新策略
 
 1. 在 `strategies/signals.py` 中创建新的信号生成器类

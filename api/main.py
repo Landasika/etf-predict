@@ -598,98 +598,6 @@ async def optimize_macd_parameters(etf_code: str, request: Request):
         raise HTTPException(status_code=500, detail=f"优化失败: {str(e)}")
 
 
-@app.post("/api/macd-kdj-discrete/optimize-params/{etf_code}")
-async def optimize_macd_kdj_discrete_parameters(etf_code: str, request: Request):
-    """
-    优化MACD+KDJ离散仓位系统参数
-
-    使用两阶段网格搜索优化MACD和KDJ参数
-    以最大化近一年收益率为目标
-
-    Args:
-        etf_code: ETF代码 (如 '510330.SH')
-
-    Request Body:
-        lookback_days: 优化回溯天数（默认365天）
-        optimize_kdj: 是否优化KDJ参数（默认true）
-
-    Returns:
-        优化结果，包含最优参数和性能指标
-    """
-    from strategies.macd_kdj_discrete_param_optimizer import MACDKDJDiscreteParamOptimizer
-
-    data = await request.json()
-    lookback_days = data.get('lookback_days', 365)
-    optimize_kdj = data.get('optimize_kdj', True)
-
-    try:
-        # 创建优化器并执行优化
-        optimizer = MACDKDJDiscreteParamOptimizer(etf_code, lookback_days)
-        result = optimizer.optimize(optimize_kdj)
-
-        return {
-            'success': True,
-            'etf_code': etf_code,
-            'optimization_result': result
-        }
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"优化失败: {str(e)}")
-
-
-@app.post("/api/rsi-triple-lines/optimize-params/{etf_code}")
-async def optimize_rsi_triple_lines_parameters(etf_code: str, request: Request):
-    """
-    优化RSI三线金叉死叉策略参数
-
-    使用网格搜索优化RSI三线参数
-    以最大化近一年夏普比率为目标
-
-    Args:
-        etf_code: ETF代码 (如 '510330.SH')
-
-    Returns:
-        优化结果，包含最优参数和性能指标
-    """
-    from optimization.optimize_rsi_triple_lines import RSITripleLinesOptimizer, save_optimized_params
-
-    try:
-        # 创建优化器并执行优化
-        optimizer = RSITripleLinesOptimizer(etf_code)
-        result = optimizer.optimize(n_workers=4)
-
-        if not result['success']:
-            raise HTTPException(status_code=400, detail=result.get('message', '优化失败'))
-
-        # 保存优化参数到watchlist
-        from core.watchlist import load_watchlist, save_watchlist
-        watchlist = load_watchlist()
-
-        for etf in watchlist['etfs']:
-            if etf['code'] == etf_code:
-                etf['optimized_params'] = {
-                    'rsi1_period': result['best_params']['rsi1_period'],
-                    'rsi2_period': result['best_params']['rsi2_period'],
-                    'rsi3_period': result['best_params']['rsi3_period'],
-                }
-                break
-
-        save_watchlist(watchlist)
-
-        return {
-            'success': True,
-            'etf_code': etf_code,
-            'optimization_result': result
-        }
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"优化失败: {str(e)}")
-
-
 # ==================== Watchlist Endpoints ====================
 
 @app.get("/api/watchlist")
@@ -1463,17 +1371,8 @@ async def reset_optimized_params(etf_code: str, request: Request):
 
 @app.get("/api/data-update/token-status")
 async def get_token_status():
-    """检查Tushare Token配置状态（优先从settings读取）"""
-    from core.settings_manager import get_settings_manager
-
-    # 优先从settings读取
-    settings_mgr = get_settings_manager()
-    token = settings_mgr.settings.get('tushare', {}).get('token', '')
-
-    # Fallback到config
-    if not token:
-        token = config.TUSHARE_TOKEN or ''
-
+    """检查Tushare Token配置状态（从config.json读取）"""
+    token = config.TUSHARE_TOKEN or ''
     token_configured = bool(token)
     token_preview = None
 
@@ -1770,143 +1669,34 @@ async def update_realtime_settings(request: Request):
 
 
 # ==================== 系统设置API ====================
-
-@app.get("/api/settings")
-async def get_settings():
-    """获取系统设置"""
-    from core.settings_manager import get_settings_manager
-
-    settings_mgr = get_settings_manager()
-    return {
-        'success': True,
-        'data': settings_mgr.get_settings()
-    }
-
-
-@app.post("/api/settings")
-async def update_settings(request: Request):
-    """更新系统设置"""
-    from core.settings_manager import get_settings_manager
-
-    try:
-        data = await request.json()
-
-        # 过滤敏感字段的验证
-        settings_mgr = get_settings_manager()
-        result = settings_mgr.update_settings(data)
-
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'更新设置失败: {str(e)}')
-
-
-@app.post("/api/settings/tokens")
-async def update_tokens(request: Request):
-    """更新API Tokens"""
-    from core.settings_manager import get_settings_manager
-
-    try:
-        data = await request.json()
-
-        tushare_token = data.get('tushare_token', '').strip()
-        minishare_token = data.get('minishare_token', '').strip()
-
-        settings_mgr = get_settings_manager()
-        result = settings_mgr.update_tokens(
-            tushare_token=tushare_token if tushare_token else None,
-            minishare_token=minishare_token if minishare_token else None
-        )
-
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'更新Token失败: {str(e)}')
-
-
-@app.post("/api/settings/data-source")
-async def update_data_source(request: Request):
-    """更新数据源配置"""
-    from core.settings_manager import get_settings_manager
-
-    try:
-        data = await request.json()
-
-        settings_mgr = get_settings_manager()
-
-        # 更新数据源优先级
-        if 'priority' in data:
-            if isinstance(data['priority'], list):
-                # 验证优先级
-                valid_sources = ['minishare', 'tushare', 'fund_daily', 'rt_etf_k']
-                if not all(s in valid_sources for s in data['priority']):
-                    raise HTTPException(status_code=400, detail='无效的数据源类型')
-
-                updates = {
-                    'data_source': {
-                        'priority': data['priority']
-                    }
-                }
-
-                # 根据优先级自动启用/禁用数据源
-                enabled_data = {}
-                for source in data['priority']:
-                    if source in ['minishare', 'rt_etf_k']:
-                        enabled_data[source] = True
-                    elif source in ['tushare', 'fund_daily']:
-                        enabled_data[source] = True
-
-                # 更新各个数据源的启用状态
-                if 'minishare' in enabled_data:
-                    updates['minishare'] = {'enabled': enabled_data['minishare']}
-                if 'tushare' in enabled_data:
-                    updates['tushare'] = {'enabled': enabled_data['tushare']}
-
-                settings_mgr.update_settings(updates)
-
-                return {
-                    'success': True,
-                    'message': f"数据源优先级已更新: {' → '.join(data['priority'])}",
-                    'data': {
-                        'priority': data['priority']
-                    }
-                }
-
-        raise HTTPException(status_code=400, detail='无效的请求参数')
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f'更新数据源失败: {str(e)}')
-
+# 注意：旧的 /api/settings 端点已被 /api/config 替代
+# 以下是保留的数据源状态检查端点
 
 @app.get("/api/settings/data-source/status")
 async def get_data_source_status():
-    """获取当前数据源状态"""
-    from core.settings_manager import get_settings_manager
+    """获取当前数据源状态（从config.json读取）"""
     import config
-
-    settings_mgr = get_settings_manager()
-
-    # 检查各个数据源的状态
-    active_source = settings_mgr.get_active_data_source()
 
     sources = []
 
     # Tushare状态
-    tushare_enabled = settings_mgr.settings.get('tushare', {}).get('enabled', False)
-    tushare_token = bool(settings_mgr.settings.get('tushare', {}).get('token'))
+    tushare_token = bool(config.TUSHARE_TOKEN)
     sources.append({
         'name': 'Tushare',
-        'active': tushare_enabled and tushare_token,
+        'active': tushare_token,
         'token_configured': tushare_token
     })
 
     # Minishare状态
-    minishare_enabled = settings_mgr.settings.get('minishare', {}).get('enabled', False)
-    minishare_token = bool(settings_mgr.settings.get('minishare', {}).get('token'))
+    minishare_token = bool(config.MINISHARE_TOKEN)
     sources.append({
         'name': 'Minishare',
-        'active': minishare_enabled and minishare_token,
+        'active': minishare_token,
         'token_configured': minishare_token
     })
+
+    # 确定活跃数据源（Minishare优先）
+    active_source = 'Minishare' if minishare_token else ('Tushare' if tushare_token else '无')
 
     status = {
         'active_source': active_source,
