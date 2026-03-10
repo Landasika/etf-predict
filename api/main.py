@@ -16,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
 from core.database import get_etf_info
-from core.auth import router as auth_router
+from core.auth import router as auth_router, require_auth
 
 app = FastAPI(title=config.API_TITLE, version=config.API_VERSION)
 
