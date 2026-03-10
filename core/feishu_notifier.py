@@ -1,6 +1,7 @@
 """
 飞书推送核心模块
 集成到ETF预测系统，支持策略信号推送、数据更新通知等
+配置从 conf.json 读取
 """
 import json
 import os
@@ -11,7 +12,7 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 # 飞书配置文件路径
-FEISHU_CONFIG_PATH = Path(__file__).parent.parent / "data" / "feishu_config.json"
+CONF_FILE = Path(__file__).parent.parent / "conf.json"
 
 
 class FeishuNotifier:
@@ -22,47 +23,91 @@ class FeishuNotifier:
         self.load_config()
 
     def load_config(self):
-        """加载飞书配置"""
+        """从 conf.json 加载飞书配置"""
         try:
-            if FEISHU_CONFIG_PATH.exists():
-                with open(FEISHU_CONFIG_PATH, 'r', encoding='utf-8') as f:
-                    self.config = json.load(f)
-                logger.info(f"飞书配置加载成功: {len(self.config.get('bots', []))} 个机器人")
+            if CONF_FILE.exists():
+                # 读取完整的 conf.json
+                with open(CONF_FILE, 'r', encoding='utf-8') as f:
+                    full_config = json.load(f)
+
+                # 获取飞书配置部分
+                if "feishu" in full_config:
+                    self.config = full_config["feishu"]
+                    logger.info(f"飞书配置加载成功: {len(self.config.get('bots', []))} 个机器人")
+                else:
+                    logger.warning("conf.json 中未找到 feishu 配置，使用默认配置")
+                    self._create_default_config()
             else:
-                # 创建默认配置
-                self.config = {
-                    "enabled": False,
-                    "default_bot": "bot_1",
-                    "bots": [
-                        {
-                            "id": "bot_1",
-                            "name": "默认机器人",
-                            "app_id": "",
-                            "app_secret": "",
-                            "chat_id": "",
-                            "enabled": True
-                        }
-                    ],
-                    "notifications": {
-                        "signal_alerts": True,  # 信号提醒
-                        "data_updates": False,  # 数据更新通知
-                        "backtest_complete": False,  # 回测完成通知
-                        "error_alerts": True  # 错误告警
-                    }
-                }
-                self.save_config()
-                logger.info("创建默认飞书配置")
+                # conf.json 不存在，创建默认配置
+                logger.info("conf.json 不存在，创建默认配置")
+                self._create_default_config()
         except Exception as e:
             logger.error(f"加载飞书配置失败: {e}")
             self.config = {"enabled": False, "bots": []}
 
-    def save_config(self):
-        """保存飞书配置"""
+    def _create_default_config(self):
+        """创建默认的飞书配置"""
+        self.config = {
+            "enabled": False,
+            "default_bot": "bot_1",
+            "bots": [
+                {
+                    "id": "bot_1",
+                    "name": "默认机器人",
+                    "app_id": "",
+                    "app_secret": "",
+                    "chat_id": "",
+                    "enabled": True
+                }
+            ],
+            "notifications": {
+                "signal_alerts": True,
+                "data_updates": False,
+                "backtest_complete": False,
+                "error_alerts": True
+            }
+        }
+        self.save_config_to_file()
+
+    def save_config_to_file(self):
+        """保存配置到 conf.json"""
         try:
-            FEISHU_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-            with open(FEISHU_CONFIG_PATH, 'w', encoding='utf-8') as f:
-                json.dump(self.config, f, ensure_ascii=False, indent=2)
-            logger.info("飞书配置已保存")
+            # 读取完整的 conf.json
+            if CONF_FILE.exists():
+                with open(CONF_FILE, 'r', encoding='utf-8') as f:
+                    full_config = json.load(f)
+            else:
+                full_config = {}
+
+            # 更新飞书配置
+            full_config["feishu"] = self.config
+
+            # 保存到 conf.json
+            with open(CONF_FILE, 'w', encoding='utf-8') as f:
+                json.dump(full_config, f, ensure_ascii=False, indent=2)
+
+            logger.info("飞书配置已保存到 conf.json")
+        except Exception as e:
+            logger.error(f"保存飞书配置失败: {e}")
+
+    def save_config_to_file(self):
+        """保存配置到 conf.json"""
+        try:
+            # 读取完整的 conf.json
+            if CONF_FILE.exists():
+                with open(CONF_FILE, 'r', encoding='utf-8') as f:
+                    full_config = json.load(f)
+            else:
+                full_config = {}
+
+            # 更新飞书配置
+            full_config["feishu"] = self.config
+
+            # 保存到 conf.json
+            with open(CONF_FILE, 'w', encoding='utf-8') as f:
+                json.dump(full_config, f, ensure_ascii=False, indent=2)
+
+            logger.info("飞书配置已保存到 conf.json")
         except Exception as e:
             logger.error(f"保存飞书配置失败: {e}")
 
@@ -76,23 +121,47 @@ class FeishuNotifier:
                     bot["app_secret"] = "******" if bot["app_secret"] else ""
         return safe_config
 
-    def update_config(self, new_config: dict):
-        """更新配置"""
+    def update_config(self, new_feishu_config: dict):
+        """更新飞书配置并保存到 conf.json
+
+        Args:
+            new_feishu_config: 新的飞书配置
+        """
         try:
+            # 读取完整的 conf.json
+            if CONF_FILE.exists():
+                with open(CONF_FILE, 'r', encoding='utf-8') as f:
+                    full_config = json.load(f)
+            else:
+                full_config = {}
+
             # 保留原有的app_secret（如果前端传的是******）
-            if "bots" in new_config and "bots" in self.config:
-                for new_bot in new_config["bots"]:
-                    for old_bot in self.config["bots"]:
+            if "bots" in new_feishu_config and "feishu" in full_config:
+                for new_bot in new_feishu_config["bots"]:
+                    for old_bot in full_config["feishu"].get("bots", []):
                         if (new_bot.get("id") == old_bot.get("id") and
                             new_bot.get("app_secret") == "******"):
                             new_bot["app_secret"] = old_bot.get("app_secret", "")
 
-            self.config = new_config
-            self.save_config()
+            # 更新飞书配置
+            full_config["feishu"] = new_feishu_config
+
+            # 保存到 conf.json
+            with open(CONF_FILE, 'w', encoding='utf-8') as f:
+                json.dump(full_config, f, ensure_ascii=False, indent=2)
+
+            # 更新内存中的配置
+            self.config = new_feishu_config
+
+            logger.info("飞书配置已更新")
             return True
         except Exception as e:
             logger.error(f"更新配置失败: {e}")
             return False
+
+    def save_config(self):
+        """保存配置到 conf.json"""
+        self.save_config_to_file()
 
     def is_enabled(self) -> bool:
         """检查飞书通知是否启用"""

@@ -1,0 +1,22 @@
+{
+  "feishu": {
+    "enabled": false,
+    "default_bot": "bot_1",
+    "bots": [
+      {
+        "id": "bot_1",
+        "name": "默认机器人",
+        "app_id": "cli_your_app_id",
+        "app_secret": "your_app_secret",
+        "chat_id": "oc_your_chat_id",
+        "enabled": true
+      }
+    ],
+    "notifications": {
+      "signal_alerts": true,
+      "data_updates": false,
+      "backtest_complete": false,
+      "error_alerts": true
+    }
+  }
+}

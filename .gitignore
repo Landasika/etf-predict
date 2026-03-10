@@ -60,3 +60,7 @@ tmp/
 
 # 环境变量配置
 .env
+
+# 敏感配置文件（包含密码和Token）
+config.json
+conf.json

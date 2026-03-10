@@ -1,0 +1,35 @@
+{
+  "database": {
+    "path": "data/etf.db"
+  },
+  "watchlist": {
+    "path": "data/watchlist_etfs.json"
+  },
+  "weights": {
+    "path": "optimized_weights"
+  },
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "title": "ETF预测系统API",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "session_secret_key": "change-this-to-a-random-secret-key",
+    "auth_key": "your-admin-password",
+    "max_login_attempts": 5,
+    "login_attempt_window": 300,
+    "lockout_duration": 900
+  },
+  "tushare": {
+    "token": "your-tushare-token"
+  },
+  "minishare": {
+    "token": "your-minishare-token"
+  },
+  "strategies": {
+    "macd_aggressive": "MACD激进策略",
+    "optimized_t_trading": "优化做T策略",
+    "multifactor": "多因子量化策略"
+  }
+}

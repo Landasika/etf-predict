@@ -54,6 +54,63 @@
                 </div>
             </section>
 
+            <!-- 认证设置 -->
+            <section class="setting-section">
+                <h2>🔐 认证设置</h2>
+                <div class="setting-item">
+                    <label class="setting-label">
+                        登录密码
+                        <span class="setting-desc">用于系统访问认证</span>
+                    </label>
+                    <div class="setting-input-group">
+                        <input type="password" id="authKey" class="setting-input" placeholder="输入登录密码">
+                        <span class="setting-status"></span>
+                    </div>
+                    <div class="setting-hint">
+                        修改密码后需要重新登录。建议使用强密码。
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">
+                        最大登录尝试次数
+                        <span class="setting-desc">超过此次数将锁定账户</span>
+                    </label>
+                    <input type="number" id="maxAttempts" class="setting-input" value="5" min="1" max="20">
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">
+                        锁定时长（秒）
+                        <span class="setting-desc">账户锁定后的等待时间</span>
+                    </label>
+                    <input type="number" id="lockoutDuration" class="setting-input" value="900" min="60" step="60">
+                    <span class="setting-hint">默认 900 秒（15分钟）</span>
+                </div>
+            </section>
+
+            <!-- API 服务器设置 -->
+            <section class="setting-section">
+                <h2>🌐 API 服务器设置</h2>
+                <div class="setting-item">
+                    <label class="setting-label">
+                        监听地址
+                        <span class="setting-desc">服务器监听的IP地址</span>
+                    </label>
+                    <input type="text" id="apiHost" class="setting-input" placeholder="0.0.0.0" value="0.0.0.0">
+                    <span class="setting-hint">默认 0.0.0.0 表示监听所有网卡</span>
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">
+                        监听端口
+                        <span class="setting-desc">服务器监听的端口号</span>
+                    </label>
+                    <input type="number" id="apiPort" class="setting-input" placeholder="8000" value="8000" min="1024" max="65535">
+                    <span class="setting-hint">修改端口后需要重启服务器</span>
+                </div>
+            </section>
+
             <!-- 数据源设置 -->
             <section class="setting-section">
                 <h2>📊 数据源配置</h2>

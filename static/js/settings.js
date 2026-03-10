@@ -54,45 +54,82 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Load all settings
 async function loadSettings() {
     try {
-        const response = await fetch('/api/settings');
-        const data = await response.json();
+        const data = await fetchAPI('/api/config');
 
         if (data.success) {
-            const settings = data.data;
-            console.log('Settings loaded:', settings);
+            const config = data.data;
+            console.log('Config loaded:', config);
 
             // Load tokens
-            if (settings.tushare) {
+            if (config.tushare) {
                 const tushareInput = document.getElementById('tushareToken');
                 if (tushareInput) {
-                    tushareInput.value = settings.tushare.token || '';
-                    tushareInput.placeholder = settings.tushare.token ? '已配置' : '输入Tushare Token';
+                    tushareInput.value = config.tushare.token || '';
+                    tushareInput.placeholder = config.tushare.token ? '已配置' : '输入Tushare Token';
 
                     // Show/hide status
                     const statusSpan = tushareInput.parentElement?.querySelector('.setting-status');
                     if (statusSpan) {
-                        statusSpan.textContent = settings.tushare.token ? '✓ 已配置' : '';
+                        statusSpan.textContent = config.tushare.token ? '✓ 已配置' : '';
                     }
                 }
             }
 
-            if (settings.minishare) {
+            if (config.minishare) {
                 const minishareInput = document.getElementById('minishareToken');
                 if (minishareInput) {
-                    minishareInput.value = settings.minishare.token || '';
-                    minishareInput.placeholder = settings.minishare.token ? '已配置' : '输入Minishare Token';
+                    minishareInput.value = config.minishare.token || '';
+                    minishareInput.placeholder = config.minishare.token ? '已配置' : '输入Minishare Token';
 
                     // Show/hide status
                     const statusSpan = minishareInput.parentElement?.querySelector('.setting-status');
                     if (statusSpan) {
-                        statusSpan.textContent = settings.minishare.token ? '✓ 已配置' : '';
+                        statusSpan.textContent = config.minishare.token ? '✓ 已配置' : '';
                     }
                 }
             }
 
-            // Load data source priority
-            if (settings.data_source?.priority) {
-                settings.data_source.priority.forEach((source, index) => {
+            // Load API settings
+            if (config.api) {
+                const apiHostInput = document.getElementById('apiHost');
+                if (apiHostInput) {
+                    apiHostInput.value = config.api.host || '0.0.0.0';
+                }
+
+                const apiPortInput = document.getElementById('apiPort');
+                if (apiPortInput) {
+                    apiPortInput.value = config.api.port || 8000;
+                }
+            }
+
+            // Load auth settings (with masked values)
+            if (config.auth) {
+                const authKeyInput = document.getElementById('authKey');
+                if (authKeyInput) {
+                    // Show masked value if available
+                    authKeyInput.value = config.auth.auth_key && config.auth.auth_key !== '******' ? config.auth.auth_key : '';
+                    authKeyInput.placeholder = config.auth.auth_key ? '已配置' : '输入登录密码';
+
+                    const statusSpan = authKeyInput.parentElement?.querySelector('.setting-status');
+                    if (statusSpan) {
+                        statusSpan.textContent = config.auth.auth_key ? '✓ 已配置' : '';
+                    }
+                }
+
+                const maxAttemptsInput = document.getElementById('maxAttempts');
+                if (maxAttemptsInput) {
+                    maxAttemptsInput.value = config.auth.max_login_attempts || 5;
+                }
+
+                const lockoutDurationInput = document.getElementById('lockoutDuration');
+                if (lockoutDurationInput) {
+                    lockoutDurationInput.value = config.auth.lockout_duration || 900;
+                }
+            }
+
+            // Load data source priority (if data_source config exists)
+            if (config.data_source?.priority) {
+                config.data_source.priority.forEach((source, index) => {
                     const checkbox = document.getElementById(`priority_${source}`);
                     if (checkbox) {
                         checkbox.checked = true;
@@ -107,93 +144,144 @@ async function loadSettings() {
                 });
             }
 
-            // Load update schedule
-            if (settings.update_schedule) {
+            // Load update schedule (if update_schedule config exists)
+            if (config.update_schedule) {
                 const autoUpdateCheckbox = document.getElementById('autoUpdateEnabled');
                 if (autoUpdateCheckbox) {
-                    autoUpdateCheckbox.checked = settings.update_schedule.enabled || false;
+                    autoUpdateCheckbox.checked = config.update_schedule.enabled || false;
                 }
 
                 const updateTimeInput = document.getElementById('updateTime');
                 if (updateTimeInput) {
-                    updateTimeInput.value = settings.update_schedule.time || '15:05';
+                    updateTimeInput.value = config.update_schedule.time || '15:05';
                 }
             }
 
-            // Load strategy defaults
-            if (settings.strategy) {
+            // Load strategy defaults (if strategy config exists)
+            if (config.strategy) {
                 const defaultStrategySelect = document.getElementById('defaultStrategy');
                 if (defaultStrategySelect) {
-                    defaultStrategySelect.value = settings.strategy.default_strategy || 'macd_aggressive';
+                    defaultStrategySelect.value = config.strategy.default_strategy || 'macd_aggressive';
                 }
 
                 const initialCapitalInput = document.getElementById('initialCapital');
                 if (initialCapitalInput) {
-                    initialCapitalInput.value = settings.strategy.default_initial_capital || 2000;
+                    initialCapitalInput.value = config.strategy.default_initial_capital || 2000;
                 }
 
                 const totalPositionsInput = document.getElementById('totalPositions');
                 if (totalPositionsInput) {
-                    totalPositionsInput.value = settings.strategy.default_positions || 10;
+                    totalPositionsInput.value = config.strategy.default_positions || 10;
                 }
             }
         } else {
-            console.error('Failed to load settings:', data.message);
-            showToast('加载设置失败', 'error');
+            console.error('Failed to load config:', data.message);
+            showToast('加载配置失败', 'error');
         }
     } catch (error) {
-        console.error('Error loading settings:', error);
-        showToast('加载设置失败: ' + error.message, 'error');
+        console.error('Error loading config:', error);
+        showToast('加载配置失败: ' + error.message, 'error');
     }
 }
 
 // Save all settings
 async function saveSettings() {
     try {
-        // Collect all settings
-        const settings = {
+        // Get current config first to preserve unchanged fields
+        const currentConfigData = await fetchAPI('/api/config');
+        if (!currentConfigData.success) {
+            showToast('获取当前配置失败', 'error');
+            return;
+        }
+
+        const currentConfig = currentConfigData.data;
+
+        // Collect all settings to update
+        const updates = {
             tushare: {
-                token: document.getElementById('tushareToken')?.value || ''
+                token: document.getElementById('tushareToken')?.value || currentConfig.tushare?.token || ''
             },
             minishare: {
-                token: document.getElementById('minishareToken')?.value || ''
-            },
-            data_source: {
-                priority: getDataSourcePriority()
-            },
-            update_schedule: {
-                enabled: document.getElementById('autoUpdateEnabled')?.checked || false,
-                time: document.getElementById('updateTime')?.value || '15:05'
-            },
-            strategy: {
-                default_strategy: document.getElementById('defaultStrategy')?.value || 'macd_aggressive',
-                default_initial_capital: parseFloat(document.getElementById('initialCapital')?.value) || 2000,
-                default_positions: parseInt(document.getElementById('totalPositions')?.value) || 10
+                token: document.getElementById('minishareToken')?.value || currentConfig.minishare?.token || ''
             }
         };
 
-        console.log('Saving settings:', settings);
+        // Add API settings if inputs exist
+        const apiHostInput = document.getElementById('apiHost');
+        const apiPortInput = document.getElementById('apiPort');
+        if (apiHostInput || apiPortInput) {
+            updates.api = {
+                host: apiHostInput?.value || currentConfig.api?.host || '0.0.0.0',
+                port: parseInt(apiPortInput?.value) || currentConfig.api?.port || 8000,
+                title: currentConfig.api?.title || 'ETF预测系统API',
+                version: currentConfig.api?.version || '1.0.0'
+            };
+        }
 
-        const response = await fetch('/api/settings', {
+        // Add auth settings if inputs exist
+        const authKeyInput = document.getElementById('authKey');
+        const maxAttemptsInput = document.getElementById('maxAttempts');
+        const lockoutDurationInput = document.getElementById('lockoutDuration');
+        if (authKeyInput || maxAttemptsInput || lockoutDurationInput) {
+            updates.auth = {
+                session_secret_key: currentConfig.auth?.session_secret_key || 'change-this-in-production',
+                auth_key: authKeyInput?.value || currentConfig.auth?.auth_key || 'admin123',
+                max_login_attempts: parseInt(maxAttemptsInput?.value) || currentConfig.auth?.max_login_attempts || 5,
+                login_attempt_window: currentConfig.auth?.login_attempt_window || 300,
+                lockout_duration: parseInt(lockoutDurationInput?.value) || currentConfig.auth?.lockout_duration || 900
+            };
+        }
+
+        // Add data source priority if changed
+        const priority = getDataSourcePriority();
+        if (priority.length > 0) {
+            updates.data_source = {
+                priority: priority
+            };
+        }
+
+        // Add update schedule if changed
+        const autoUpdateCheckbox = document.getElementById('autoUpdateEnabled');
+        const updateTimeInput = document.getElementById('updateTime');
+        if (autoUpdateCheckbox || updateTimeInput) {
+            updates.update_schedule = {
+                enabled: autoUpdateCheckbox?.checked ?? currentConfig.update_schedule?.enabled ?? false,
+                time: updateTimeInput?.value || currentConfig.update_schedule?.time || '15:05'
+            };
+        }
+
+        // Add strategy defaults if changed
+        const defaultStrategySelect = document.getElementById('defaultStrategy');
+        const initialCapitalInput = document.getElementById('initialCapital');
+        const totalPositionsInput = document.getElementById('totalPositions');
+        if (defaultStrategySelect || initialCapitalInput || totalPositionsInput) {
+            updates.strategy = {
+                default_strategy: defaultStrategySelect?.value || currentConfig.strategy?.default_strategy || 'macd_aggressive',
+                default_initial_capital: parseFloat(initialCapitalInput?.value) || currentConfig.strategy?.default_initial_capital || 2000,
+                default_positions: parseInt(totalPositionsInput?.value) || currentConfig.strategy?.default_positions || 10
+            };
+        }
+
+        console.log('Saving config updates:', updates);
+
+        const data = await fetchAPI('/api/config', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(settings)
+            body: JSON.stringify(updates)
         });
 
-        const data = await response.json();
-
         if (data.success) {
-            showToast('设置已保存');
+            showToast('配置已保存');
             await loadDataSourceStatus(); // Refresh status
             await saveFeishuSettings(); // Save Feishu config
         } else {
-            console.error('Failed to save settings:', data.message);
+            console.error('Failed to save config:', data.message);
             showToast('保存失败: ' + data.message, 'error');
         }
     } catch (error) {
-        console.error('Error saving settings:', error);
+        console.error('Error saving config:', error);
         showToast('保存失败: ' + error.message, 'error');
     }
 }
@@ -253,8 +341,8 @@ async function testToken(source) {
 
         showToast('正在测试连接...');
 
-        // Send test request
-        const response = await fetch('/api/settings/test-token', {
+        // Send test request using fetchAPI
+        const data = await fetchAPI('/api/settings/test-token', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -264,8 +352,6 @@ async function testToken(source) {
                 token: token
             })
         });
-
-        const data = await response.json();
 
         if (data.success) {
             showToast(`${source === 'tushare' ? 'Tushare' : 'Minishare'} 连接成功`);
@@ -281,8 +367,7 @@ async function testToken(source) {
 // Load data source status
 async function loadDataSourceStatus() {
     try {
-        const response = await fetch('/api/settings/data-source/status');
-        const data = await response.json();
+        const data = await fetchAPI('/api/settings/data-source/status');
 
         const statusBox = document.getElementById('dataSourceStatus');
         if (!statusBox) return;
@@ -364,7 +449,7 @@ async function updateDataSource() {
     try {
         const priority = getDataSourcePriority();
 
-        const response = await fetch('/api/settings/data-source', {
+        const data = await fetchAPI('/api/settings/data-source', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -373,8 +458,6 @@ async function updateDataSource() {
                 priority: priority
             })
         });
-
-        const data = await response.json();
 
         if (data.success) {
             showToast('数据源优先级已更新');
@@ -676,10 +759,10 @@ async function saveFeishuConfig(config) {
 // Save all Feishu settings
 async function saveFeishuSettings() {
     try {
-        const config = await fetchAPI('/api/feishu/config');
-        if (!config.success) return;
+        const configData = await fetchAPI('/api/feishu/config');
+        if (!configData.success) return;
 
-        const feishuConfig = config.data;
+        const feishuConfig = configData.data;
 
         // Update enabled status
         feishuConfig.enabled = document.getElementById('feishuEnabled')?.checked || false;

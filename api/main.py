@@ -1996,33 +1996,82 @@ async def test_token(request: Request):
 
 @app.get("/api/feishu/config")
 async def get_feishu_config():
-    """获取飞书通知配置"""
-    from core.feishu_notifier import get_feishu_notifier
+    """获取飞书通知配置（从 conf.json）"""
+    try:
+        import json
+        conf_path = os.path.join(config.BASE_DIR, 'conf.json')
 
-    notifier = get_feishu_notifier()
-    return {
-        'success': True,
-        'data': notifier.get_config()
-    }
+        if not os.path.exists(conf_path):
+            return {
+                'success': True,
+                'data': {
+                    'enabled': False,
+                    'default_bot': 'bot_1',
+                    'bots': [],
+                    'notifications': {}
+                }
+            }
+
+        with open(conf_path, 'r', encoding='utf-8') as f:
+            full_config = json.load(f)
+
+        feishu_config = full_config.get('feishu', {})
+
+        # 隐藏app_secret
+        if 'bots' in feishu_config:
+            for bot in feishu_config['bots']:
+                if bot.get('app_secret'):
+                    bot['app_secret'] = '******' if bot['app_secret'] else ''
+
+        return {
+            'success': True,
+            'data': feishu_config
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'获取飞书配置失败: {str(e)}')
 
 
 @app.post("/api/feishu/config")
 async def update_feishu_config(request: Request):
-    """更新飞书通知配置"""
-    from core.feishu_notifier import get_feishu_notifier
-
+    """更新飞书通知配置（保存到 conf.json）"""
     try:
-        data = await request.json()
-        notifier = get_feishu_notifier()
+        import json
+        conf_path = os.path.join(config.BASE_DIR, 'conf.json')
 
-        success = notifier.update_config(data)
-        if success:
-            return {
-                'success': True,
-                'message': '飞书配置已更新'
-            }
+        data = await request.json()
+
+        # 读取完整配置
+        if os.path.exists(conf_path):
+            with open(conf_path, 'r', encoding='utf-8') as f:
+                full_config = json.load(f)
         else:
-            raise HTTPException(status_code=500, detail='更新配置失败')
+            full_config = {}
+
+        # 保留app_secret（如果前端发送的是******）
+        if 'bots' in data:
+            if 'feishu' in full_config:
+                for new_bot in data['bots']:
+                    for old_bot in full_config['feishu'].get('bots', []):
+                        if (new_bot.get('id') == old_bot.get('id') and
+                            new_bot.get('app_secret') == '******'):
+                            new_bot['app_secret'] = old_bot.get('app_secret', '')
+
+        # 更新飞书配置
+        full_config['feishu'] = data
+
+        # 保存到 conf.json
+        with open(conf_path, 'w', encoding='utf-8') as f:
+            json.dump(full_config, f, ensure_ascii=False, indent=2)
+
+        # 重新加载飞书通知器配置
+        from core.feishu_notifier import get_feishu_notifier
+        notifier = get_feishu_notifier()
+        notifier.load_config()
+
+        return {
+            'success': True,
+            'message': '飞书配置已更新'
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -2089,6 +2138,111 @@ async def send_feishu_message(request: Request):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f'发送消息失败: {str(e)}')
+
+
+# ==================== 配置文件API ====================
+
+@app.get("/api/config")
+async def get_system_config():
+    """获取系统配置（config.json）"""
+    try:
+        config_data = config.get_config()
+
+        # 隐藏敏感信息
+        safe_config = config_data.copy()
+
+        # 隐藏大部分token
+        if safe_config.get('tushare', {}).get('token'):
+            token = safe_config['tushare']['token']
+            safe_config['tushare']['token'] = token[:8] + "..." if token and len(token) > 8 else (token or "")
+
+        if safe_config.get('minishare', {}).get('token'):
+            token = safe_config['minishare']['token']
+            safe_config['minishare']['token'] = token[:8] + "..." if token and len(token) > 8 else (token or "")
+
+        # 隐藏session key
+        if safe_config.get('auth', {}).get('session_secret_key'):
+            key = safe_config['auth']['session_secret_key']
+            if key and len(key) > 20:
+                safe_config['auth']['session_secret_key'] = key[:20] + "..."
+
+        return {
+            'success': True,
+            'data': safe_config
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'获取配置失败: {str(e)}')
+
+
+@app.post("/api/config")
+async def update_system_config(request: Request):
+    """更新系统配置（config.json）"""
+    try:
+        data = await request.json()
+
+        # 读取当前配置
+        current_config = config.get_config()
+
+        # 保留敏感字段（如果前端发送的是隐藏值）
+        if 'auth' in data:
+            if data['auth'].get('session_secret_key', '').endswith('...'):
+                data['auth']['session_secret_key'] = current_config['auth']['session_secret_key']
+            if data['auth'].get('auth_key', '') == '******':
+                data['auth']['auth_key'] = current_config['auth']['auth_key']
+
+        if 'tushare' in data:
+            if data['tushare'].get('token', '').endswith('...'):
+                data['tushare']['token'] = current_config['tushare']['token']
+
+        if 'minishare' in data:
+            if data['minishare'].get('token', '').endswith('...'):
+                data['minishare']['token'] = current_config['minishare']['token']
+
+        # 更新配置
+        success = config.update_config(data)
+
+        if success:
+            # 重新加载认证配置
+            if 'auth' in data:
+                import hashlib
+                global AUTH_KEY, AUTH_KEY_HASH, SESSION_SECRET_KEY
+                AUTH_KEY = data['auth']['auth_key']
+                AUTH_KEY_HASH = hashlib.sha256(AUTH_KEY.encode()).hexdigest()
+                SESSION_SECRET_KEY = data['auth']['session_secret_key']
+
+            # 重新加载token
+            if 'tushare' in data:
+                global TUSHARE_TOKEN
+                TUSHARE_TOKEN = data['tushare']['token']
+
+            if 'minishare' in data:
+                global MINISHARE_TOKEN
+                MINISHARE_TOKEN = data['minishare']['token']
+
+            return {
+                'success': True,
+                'message': '配置已更新，重启后生效'
+            }
+        else:
+            raise HTTPException(status_code=500, detail='更新配置失败')
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'更新配置失败: {str(e)}')
+
+
+@app.post("/api/config/reload")
+async def reload_system_config():
+    """重新加载配置文件"""
+    try:
+        config.reload_config()
+        return {
+            'success': True,
+            'message': '配置已重新加载'
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'重新加载配置失败: {str(e)}')
 
 
 if __name__ == "__main__":
