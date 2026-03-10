@@ -43,6 +43,7 @@
 
 ### 部署运维
 - [DEPLOYMENT.md](../DEPLOYMENT.md) - 部署指南（开发/生产/Docker）
+- [START_SCRIPT_GUIDE.md](START_SCRIPT_GUIDE.md) - 启动脚本使用指南（前台/后台）
 
 ### 认证与安全
 - [AUTHENTICATION.md](AUTHENTICATION.md) - 身份认证使用指南
