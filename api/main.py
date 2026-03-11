@@ -1535,7 +1535,7 @@ async def configure_feishu_notification(request: Request):
         if not config.update_config({
             'feishu_notification_schedule': {
                 'enabled': enabled,
-                'times': scheduler.feishu_notification_times.copy()
+                'times': ','.join(scheduler.feishu_notification_times)
             }
         }):
             raise HTTPException(status_code=500, detail='保存飞书定时发送配置失败')

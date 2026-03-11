@@ -36,13 +36,7 @@
   },
   "feishu_notification_schedule": {
     "enabled": false,
-    "times": [
-      "09:40",
-      "10:40",
-      "11:40",
-      "13:40",
-      "14:40"
-    ]
+    "times": "09:40,10:40,11:40,13:40,14:40"
   },
   "strategies": {
     "macd_aggressive": "MACD激进策略",

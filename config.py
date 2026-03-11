@@ -14,6 +14,7 @@ CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
 
 DEFAULT_UPDATE_TIME = "15:05"
 DEFAULT_FEISHU_NOTIFICATION_TIMES = ["09:40", "10:40", "11:40", "13:40", "14:40"]
+DEFAULT_FEISHU_NOTIFICATION_TIMES_TEXT = ",".join(DEFAULT_FEISHU_NOTIFICATION_TIMES)
 DEFAULT_CONFIG = {
     "database": {"path": "data/etf.db"},
     "watchlist": {"path": "data/watchlist_etfs.json"},
@@ -42,7 +43,7 @@ DEFAULT_CONFIG = {
     },
     "feishu_notification_schedule": {
         "enabled": False,
-        "times": DEFAULT_FEISHU_NOTIFICATION_TIMES.copy()
+        "times": DEFAULT_FEISHU_NOTIFICATION_TIMES_TEXT
     },
     "strategies": {
         "macd_aggressive": "MACD激进策略",

@@ -52,6 +52,10 @@ class ETFOperationReport:
                     if signal_result and signal_result.get('success'):
                         data = signal_result.get('data', {})
                         latest_data = data.get('latest_data', {})
+                        current_positions = data.get('positions_used', 0)
+                        previous_positions = latest_data.get('previous_positions_used', 0)
+                        today_action = current_positions - previous_positions
+                        total_positions = etf.get('total_positions', 10)
 
                         # 计算当日涨幅（和API相同的逻辑）
                         daily_change_pct = 0.0
@@ -66,16 +70,62 @@ class ETFOperationReport:
                             daily_change_pct = 0.0
 
                         # 计算今日收益（基于昨日持仓，和API相同的公式）
-                        yesterday_positions = latest_data.get('previous_positions_used', 0)
+                        yesterday_positions = previous_positions
                         daily_profit = yesterday_positions * 200 * (daily_change_pct / 100)
+
+                        # 和主界面保持一致：今日操作基于持仓变化，而不是涨跌幅
+                        action_reason = ''
+                        if today_action > 0:
+                            if latest_data.get('signal_type') == 'BUY':
+                                strength = latest_data.get('signal_strength', 0)
+                                if strength >= 10:
+                                    action_reason = '回踩MA60未破+MACD金叉，最强买入信号'
+                                elif strength >= 9:
+                                    action_reason = '正鸭嘴形态，强烈看多'
+                                elif strength >= 8:
+                                    action_reason = '零轴上方金叉，上升趋势明确'
+                                else:
+                                    action_reason = 'MACD金叉买入'
+                            else:
+                                action_reason = '加仓买入'
+                        elif today_action < 0:
+                            macd_dif = latest_data.get('macd_dif', 0)
+                            macd_dea = latest_data.get('macd_dea', 0)
+                            kdj_k = latest_data.get('kdj_k', 0)
+                            kdj_status = '严重超买' if kdj_k > 80 else ('超买' if kdj_k > 70 else '正常')
+
+                            if kdj_status == '严重超买':
+                                action_reason = f'KDJ{kdj_status}，止盈减仓'
+                            elif macd_dif < macd_dea:
+                                action_reason = 'MACD死叉，减仓避险'
+                            elif current_positions > 7:
+                                action_reason = '涨幅较大，分批止盈'
+                            else:
+                                action_reason = '信号转弱，减仓保住利润'
+                        else:
+                            action_reason = '保持现有仓位'
+
+                        if today_action > 0:
+                            today_operation = f'买入{today_action}仓'
+                        elif today_action < 0:
+                            today_operation = f'卖出{abs(today_action)}仓'
+                        else:
+                            today_operation = '持有'
 
                         self.etf_data[code] = {
                             'name': latest_data.get('name', name),
                             'close': latest_data.get('close', 0),
                             'pct_chg': daily_change_pct,  # 使用计算的涨幅
                             'previous_positions_used': yesterday_positions,  # 昨日持仓
-                            'positions_used': data.get('positions_used', 0),  # 今日持仓
-                            'daily_profit': daily_profit  # 今日收益
+                            'positions_used': current_positions,  # 今日持仓
+                            'daily_profit': daily_profit,  # 今日收益
+                            'today_action_count': today_action,
+                            'today_operation': today_operation,
+                            'action_reason': action_reason,
+                            'next_action': data.get('next_action', '--'),
+                            'signal_type': latest_data.get('signal_type', 'HOLD'),
+                            'signal_strength': latest_data.get('signal_strength', 0),
+                            'total_positions': total_positions
                         }
                     else:
                         print(f"⚠️  {code} 信号计算失败: {signal_result.get('message', '未知错误')}")
@@ -313,18 +363,18 @@ class ETFOperationReport:
 
             data = self.etf_data[code]
 
-            # 简单的买入信号判断
-            # 这里应该从策略信号获取，暂时用涨跌判断
-            if data['pct_chg'] and data['pct_chg'] < -1:  # 跌幅超过1%建议买入
+            if data.get('today_action_count', 0) > 0:
                 buy_list.append({
                     'name': etf.get('sector', etf['name']),
                     'code': code,
                     'fund_name': data['name'],
                     'price': data['close'],
                     'change_pct': f"{data['pct_chg']:.2f}",
-                    'suggested_positions': etf.get('total_positions', 10),
-                    'total_positions': etf.get('total_positions', 10),
-                    'current_positions': 0  # 假设新建仓位
+                    'suggested_positions': abs(data.get('today_action_count', 0)),
+                    'total_positions': data.get('total_positions', etf.get('total_positions', 10)),
+                    'current_positions': data.get('positions_used', 0),
+                    'action_reason': data.get('action_reason', ''),
+                    'next_action': data.get('next_action', '--')
                 })
 
         return buy_list
@@ -341,22 +391,19 @@ class ETFOperationReport:
 
             data = self.etf_data[code]
 
-            # 简单的卖出信号判断
-            if data['pct_chg'] and data['pct_chg'] > 1:  # 涨幅超过1%建议卖出
-                position_value = etf.get('position_value', 2000)
-                pct_chg = data['pct_chg']
-                daily_return = position_value * pct_chg / 100
-
+            if data.get('today_action_count', 0) < 0:
                 sell_list.append({
                     'name': etf.get('sector', etf['name']),
                     'code': code,
                     'fund_name': data['name'],
                     'price': data['close'],
-                    'change_pct': f"{pct_chg:.2f}",
-                    'suggested_positions': etf.get('total_positions', 10),
-                    'daily_return': daily_return,
-                    'total_positions': etf.get('total_positions', 10),
-                    'current_positions': etf.get('total_positions', 10)
+                    'change_pct': f"{data['pct_chg']:.2f}",
+                    'suggested_positions': abs(data.get('today_action_count', 0)),
+                    'daily_return': data.get('daily_profit', 0),
+                    'total_positions': data.get('total_positions', etf.get('total_positions', 10)),
+                    'current_positions': data.get('positions_used', 0),
+                    'action_reason': data.get('action_reason', ''),
+                    'next_action': data.get('next_action', '--')
                 })
 
         return sorted(sell_list, key=lambda x: x['daily_return'], reverse=True)
@@ -373,21 +420,18 @@ class ETFOperationReport:
 
             data = self.etf_data[code]
 
-            # 持有信号：涨跌幅在-1%到1%之间
-            if data['pct_chg'] and -1 <= data['pct_chg'] <= 1:
-                position_value = etf.get('position_value', 2000)
-                pct_chg = data['pct_chg']
-                daily_return = position_value * pct_chg / 100
-
+            if data.get('today_action_count', 0) == 0:
                 hold_list.append({
                     'name': etf.get('sector', etf['name']),
                     'code': code,
                     'fund_name': data['name'],
                     'price': data['close'],
-                    'change_pct': f"{pct_chg:.2f}",
-                    'daily_return': daily_return,
-                    'total_positions': etf.get('total_positions', 10),
-                    'current_positions': etf.get('total_positions', 10)
+                    'change_pct': f"{data['pct_chg']:.2f}",
+                    'daily_return': data.get('daily_profit', 0),
+                    'total_positions': data.get('total_positions', etf.get('total_positions', 10)),
+                    'current_positions': data.get('positions_used', 0),
+                    'action_reason': data.get('action_reason', ''),
+                    'next_action': data.get('next_action', '--')
                 })
 
         return hold_list

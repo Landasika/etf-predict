@@ -94,9 +94,17 @@ class DataUpdateScheduler:
         if not self.set_update_time(update_time):
             self.set_update_time(config.DEFAULT_UPDATE_TIME)
 
-        feishu_times = feishu_schedule.get('times', config.DEFAULT_FEISHU_NOTIFICATION_TIMES)
-        if not isinstance(feishu_times, list) or not feishu_times:
+        feishu_times = feishu_schedule.get('times', config.DEFAULT_FEISHU_NOTIFICATION_TIMES_TEXT)
+        if isinstance(feishu_times, str):
+            feishu_times = [item.strip() for item in feishu_times.split(',') if item.strip()]
+        elif isinstance(feishu_times, list):
+            feishu_times = [str(item).strip() for item in feishu_times if str(item).strip()]
+        else:
             feishu_times = config.DEFAULT_FEISHU_NOTIFICATION_TIMES.copy()
+
+        if not feishu_times:
+            feishu_times = config.DEFAULT_FEISHU_NOTIFICATION_TIMES.copy()
+
         if not self.set_feishu_notification_times(feishu_times):
             self.set_feishu_notification_times(config.DEFAULT_FEISHU_NOTIFICATION_TIMES.copy())
 
