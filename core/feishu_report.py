@@ -27,50 +27,42 @@ class ETFOperationReport:
         if not self.watchlist or not self.watchlist.get('etfs'):
             return False
 
-        # 从API获取信号数据（包含previous_positions_used）
+        # 直接调用内部函数获取信号数据（避免HTTP认证问题）
         try:
-            import requests
-            # 尝试多个端口
-            api_urls = [
-                "http://127.0.0.1:8000/api/watchlist/batch-signals",
-                "http://127.0.0.1:8001/api/watchlist/batch-signals"
-            ]
+            from core.watchlist import calculate_realtime_signal
 
-            for api_url in api_urls:
+            print("✓ 直接调用内部函数获取数据")
+
+            etfs = self.watchlist.get('etfs', [])
+            for etf in etfs:
+                code = etf['code']
+                name = etf.get('name', code)
+
                 try:
-                    response = requests.get(api_url, timeout=10)
-                    if response.status_code == 200:
-                        data = response.json()
-                        if data.get('success'):
-                            # 从API数据中提取所需信息
-                            items = data.get('data', [])
-                            for item in items:
-                                code = item['code']
-                                latest_data = item.get('latest_data', {})
+                    # 调用内部信号计算函数
+                    signal_data = calculate_realtime_signal(code, name)
 
-                                self.etf_data[code] = {
-                                    'name': item.get('name', code),
-                                    'close': latest_data.get('close', 0),
-                                    'pct_chg': latest_data.get('pct_chg', 0) or latest_data.get('change_pct', 0),
-                                    'previous_positions_used': latest_data.get('previous_positions_used', 0),
-                                    'positions_used': latest_data.get('positions_used', 0),
-                                    'daily_profit': item.get('daily_profit', 0)
-                                }
-
-                            print(f"✓ 从API获取数据成功: {api_url}")
-                            return True
-                except requests.exceptions.ConnectionError:
-                    continue
+                    if signal_data:
+                        self.etf_data[code] = {
+                            'name': signal_data.get('name', name),
+                            'close': signal_data.get('close', 0),
+                            'pct_chg': signal_data.get('pct_chg', 0) or signal_data.get('change_pct', 0),
+                            'previous_positions_used': signal_data.get('previous_positions_used', 0),
+                            'positions_used': signal_data.get('positions_used', 0),
+                            'daily_profit': signal_data.get('daily_profit', 0)
+                        }
                 except Exception as e:
-                    print(f"API调用失败 ({api_url}): {e}")
+                    print(f"⚠️  获取 {code} 数据失败: {e}")
                     continue
 
-            print("❌ 所有API端点连接失败")
+            if self.etf_data:
+                print(f"✓ 成功获取 {len(self.etf_data)} 个ETF的数据")
+                return True
 
         except Exception as e:
-            print(f"从API获取数据失败: {e}")
+            print(f"❌ 调用内部函数失败: {e}")
 
-        # 如果API调用失败，使用数据库数据（fallback）
+        # 如果内部调用失败，使用数据库数据（fallback）
         # 获取ETF数据
         etfs = self.watchlist.get('etfs', [])
         for etf in etfs:
