@@ -200,9 +200,9 @@ class DataUpdateScheduler:
                 etfs = watchlist_data.get('etfs', [])
                 etf_codes = [etf['code'] for etf in etfs[:10]]
 
-                # 构建消息
-                message_lines = ["📊 ETF交易建议\n"]
-                message_lines.append(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                # 构建Markdown格式的消息
+                message_lines = [f"**ETF交易建议**\n\n"]
+                message_lines.append(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
 
                 for etf_code in etf_codes[:10]:  # 最多显示10个
                     try:
@@ -233,18 +233,19 @@ class DataUpdateScheduler:
                                     else:
                                         change_str = f"+{pct_chg:.2f}%" if pct_chg >= 0 else f"{pct_chg:.2f}%"
                                         emoji = "🟢" if pct_chg >= 0 else "🔴"
-                                    message_lines.append(f"{emoji} {name or etf_code} ({etf_code})")
-                                    message_lines.append(f"   价格: {close:.3f}  涨跌: {change_str}\n")
+                                    message_lines.append(f"{emoji} **{name or etf_code}** (`{etf_code}`)\n")
+                                    message_lines.append(f"> 价格: `{close:.3f}`  涨跌: `{change_str}`\n\n")
                     except Exception as e:
                         logger.error(f"获取 {etf_code} 数据失败: {e}")
 
-                message_lines.append("\n💡 详细信息请访问系统查看")
+                message_lines.append("---\n")
+                message_lines.append("💡 详细信息请访问系统查看")
 
                 message = "".join(message_lines)
 
-            # 发送消息
+            # 发送消息（使用消息卡片格式）
             import asyncio
-            result = asyncio.run(notifier.send_message(message))
+            result = asyncio.run(notifier.send_message(message, title="📊 ETF交易建议"))
 
             self.feishu_notification_status['last_send'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             self.feishu_notification_status['last_result'] = '成功' if result else '失败'

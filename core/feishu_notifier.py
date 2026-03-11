@@ -178,8 +178,17 @@ class FeishuNotifier:
                 return bot
         return None
 
-    async def send_message(self, message: str, bot_id: Optional[str] = None) -> bool:
-        """发送消息到飞书"""
+    async def send_message(self, message: str, bot_id: Optional[str] = None, title: str = "📊 消息通知") -> bool:
+        """发送消息到飞书（使用消息卡片格式）
+
+        Args:
+            message: 消息内容（支持Markdown格式）
+            bot_id: 机器人ID
+            title: 消息卡片标题
+
+        Returns:
+            是否发送成功
+        """
         if not self.is_enabled():
             logger.debug("飞书通知未启用")
             return False
@@ -201,7 +210,7 @@ class FeishuNotifier:
                 chat_id=bot["chat_id"],
                 name=bot.get("name", "default")
             )
-            feishu_bot.send_text_message(message)
+            feishu_bot.send_interactive_card(markdown_content=message, title=title)
             logger.info(f"飞书消息发送成功: {bot.get('name')}")
             return True
         except Exception as e:
