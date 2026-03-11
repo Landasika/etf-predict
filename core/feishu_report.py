@@ -75,6 +75,16 @@ class ETFOperationReport:
         sell_list = self._get_sell_list()
         hold_list = self._get_hold_list()
 
+        # 持仓统计
+        lines.append("## 📊 持仓统计\n")
+        lines.append("| 项目 | 数值 |")
+        lines.append("| --- | --- |")
+
+        stats = self._calculate_stats()
+        lines.append(f"| 昨日总仓位 | {stats.get('total_positions', 0)}仓 |")
+        lines.append(f"| 昨日总资金 | ¥{stats.get('total_capital', 0):,.0f} |")
+        lines.append(f"| 今日总收益 | ¥{stats.get('total_return', 0):+,.2f} |\n")
+
         # 今日操作建议总结
         lines.append("## 📋 今日操作建议\n")
         lines.append("| 操作类型 | 数量 | 说明 |")
@@ -98,16 +108,6 @@ class ETFOperationReport:
             lines.append("| 🟡 持有 | 0个 | 暂无持仓 |")
 
         lines.append("")
-
-        # 持仓统计
-        lines.append("## 📊 持仓统计\n")
-        lines.append("| 项目 | 数值 |")
-        lines.append("| --- | --- |")
-
-        stats = self._calculate_stats()
-        lines.append(f"| 昨日总仓位 | {stats.get('total_positions', 0)}仓 |")
-        lines.append(f"| 昨日总资金 | ¥{stats.get('total_capital', 0):,.0f} |")
-        lines.append(f"| 今日总收益 | ¥{stats.get('total_return', 0):+,.2f} |\n")
 
         # 建议卖出
         if sell_list:
