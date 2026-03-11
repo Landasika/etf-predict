@@ -301,6 +301,140 @@ python3 scripts/diagnose_feishu.py
    - 诊断输出
    - 相关日志片段
 
+## 报告显示0持仓的问题
+
+### 问题现象
+
+飞书报告中显示：
+```
+| 有持仓ETF | 0个 | 昨日实际有持仓 |
+| 昨日总仓位 | 0仓 | 实际持仓总和 |
+| 昨日总资金 | ¥0 | 持仓总价值（200元/仓）|
+```
+
+### 原因分析
+
+报告生成器（`core/feishu_report.py`）需要从以下数据源获取持仓信息：
+
+1. **主要数据源**：API接口 `/api/watchlist/batch-signals`
+   - 返回 `previous_positions_used` 字段
+   - 这个数据来自策略回测结果
+
+2. **备用数据源**：数据库 `etf_basic.extname` 字段
+   - 格式：`ETF名称 [X仓]`
+   - 用于没有回测数据时的测试
+
+### 诊断步骤
+
+```bash
+# SSH 到远程服务器
+ssh root@192.168.8.30
+
+# 进入项目目录
+cd /root/etf-predict
+
+# 运行持仓数据诊断
+python3 scripts/diagnose_holdings.py
+```
+
+诊断脚本会检查：
+- ✓ 数据库 extname 字段是否有持仓信息
+- ✓ API 是否返回持仓数据
+- ✓ 报告生成是否正常
+
+### 解决方案
+
+#### 方案1：添加模拟持仓数据（用于测试）
+
+```bash
+# 在远程服务器运行
+cd /root/etf-predict
+python3 scripts/quick_test_feishu.py
+```
+
+这个脚本会：
+1. 随机选择10-15个ETF添加模拟持仓（3-10仓）
+2. 生成随机涨跌幅数据
+3. 发送测试报告到飞书
+4. 保留数据供后续测试
+
+#### 方案2：运行策略回测获取真实持仓
+
+```bash
+# 确保API服务器正在运行
+python run.py
+
+# 访问回测页面
+# http://192.168.8.30:8000/backtest
+
+# 或使用API运行回测
+curl -X POST http://127.0.0.1:8000/api/backtest/run \
+  -H "Content-Type: application/json" \
+  -d '{"etf_code": "510330.SH", "strategy": "macd_aggressive"}'
+```
+
+#### 方案3：手动添加持仓数据到数据库
+
+```python
+import sqlite3
+from core.database import DATABASE_PATH
+
+conn = sqlite3.connect(DATABASE_PATH)
+cursor = conn.cursor()
+
+# 为特定ETF添加持仓信息
+cursor.execute("""
+    UPDATE etf_basic
+    SET extname = name || ' [5仓]'
+    WHERE ts_code = '510330.SH'
+""")
+
+conn.commit()
+conn.close()
+```
+
+### 清除模拟数据
+
+如果需要清除测试添加的模拟持仓数据：
+
+```bash
+python3 scripts/clear_mock_positions.py
+```
+
+### 验证修复
+
+运行诊断脚本验证：
+
+```bash
+python3 scripts/diagnose_holdings.py
+```
+
+应该看到：
+```
+✅ 数据库: 有持仓数据
+   10个ETF, 73仓, ¥14,600
+✅ API: 返回持仓数据
+✅ 报告生成: 成功
+```
+
+### 常见问题
+
+**Q: 为什么本地显示正常，远程显示0？**
+
+A: 可能原因：
+1. 远程服务器数据库没有持仓数据
+2. API服务器未运行
+3. 代码版本不一致（需要git pull同步）
+
+**Q: API返回数据但报告仍显示0？**
+
+A: 检查API返回的 `previous_positions_used` 字段：
+```bash
+curl http://127.0.0.1:8000/api/watchlist/batch-signals | jq '.data[0].latest_data.previous_positions_used'
+```
+
+如果返回0，说明回测数据不存在，需要运行回测或添加模拟数据。
+
 ## 联系方式
 
 - 项目文档：`docs/FEISHU_INTEGRATION.md`

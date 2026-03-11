@@ -30,27 +30,43 @@ class ETFOperationReport:
         # 从API获取信号数据（包含previous_positions_used）
         try:
             import requests
-            api_url = "http://127.0.0.1:8000/api/watchlist/batch-signals"
-            response = requests.get(api_url, timeout=10)
+            # 尝试多个端口
+            api_urls = [
+                "http://127.0.0.1:8000/api/watchlist/batch-signals",
+                "http://127.0.0.1:8001/api/watchlist/batch-signals"
+            ]
 
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('success'):
-                    # 从API数据中提取所需信息
-                    for item in data.get('data', []):
-                        code = item['code']
-                        latest_data = item.get('latest_data', {})
+            for api_url in api_urls:
+                try:
+                    response = requests.get(api_url, timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        if data.get('success'):
+                            # 从API数据中提取所需信息
+                            items = data.get('data', [])
+                            for item in items:
+                                code = item['code']
+                                latest_data = item.get('latest_data', {})
 
-                        self.etf_data[code] = {
-                            'name': item.get('name', code),
-                            'close': latest_data.get('close', 0),
-                            'pct_chg': latest_data.get('pct_chg', 0) or latest_data.get('change_pct', 0),
-                            'previous_positions_used': latest_data.get('previous_positions_used', 0),
-                            'positions_used': latest_data.get('positions_used', 0),
-                            'daily_profit': item.get('daily_profit', 0)
-                        }
+                                self.etf_data[code] = {
+                                    'name': item.get('name', code),
+                                    'close': latest_data.get('close', 0),
+                                    'pct_chg': latest_data.get('pct_chg', 0) or latest_data.get('change_pct', 0),
+                                    'previous_positions_used': latest_data.get('previous_positions_used', 0),
+                                    'positions_used': latest_data.get('positions_used', 0),
+                                    'daily_profit': item.get('daily_profit', 0)
+                                }
 
-                    return True
+                            print(f"✓ 从API获取数据成功: {api_url}")
+                            return True
+                except requests.exceptions.ConnectionError:
+                    continue
+                except Exception as e:
+                    print(f"API调用失败 ({api_url}): {e}")
+                    continue
+
+            print("❌ 所有API端点连接失败")
+
         except Exception as e:
             print(f"从API获取数据失败: {e}")
 
