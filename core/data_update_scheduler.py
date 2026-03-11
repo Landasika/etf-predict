@@ -198,13 +198,17 @@ class DataUpdateScheduler:
             # 获取数据
             with get_db_session() as session:
                 etfs = watchlist_data.get('etfs', [])
-                etf_codes = [etf['code'] for etf in etfs[:10]]
+                etf_codes = [etf['code'] for etf in etfs[:15]]  # 最多显示15个
 
-                # 构建Markdown格式的消息
-                message_lines = [f"**ETF交易建议**\n\n"]
-                message_lines.append(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
+                # 构建Markdown表格（更简单且兼容性更好）
+                markdown_lines = [
+                    "⏰ **时间**: " + datetime.now().strftime('%Y-%m-%d %H:%M') + "\n\n",
+                    "| ETF名称 | 代码 | 价格 | 涨跌幅 |",
+                    "| --- | --- | --- | --- |"
+                ]
 
-                for etf_code in etf_codes[:10]:  # 最多显示10个
+                # 数据行
+                for etf_code in etf_codes:
                     try:
                         # 获取最新信号
                         import sqlite3
@@ -229,23 +233,31 @@ class DataUpdateScheduler:
                                     # 处理 None 值
                                     if pct_chg is None:
                                         change_str = "N/A"
-                                        emoji = "⚪"
                                     else:
-                                        change_str = f"+{pct_chg:.2f}%" if pct_chg >= 0 else f"{pct_chg:.2f}%"
-                                        emoji = "🟢" if pct_chg >= 0 else "🔴"
-                                    message_lines.append(f"{emoji} **{name or etf_code}** (`{etf_code}`)\n")
-                                    message_lines.append(f"> 价格: `{close:.3f}`  涨跌: `{change_str}`\n\n")
+                                        change_str = f"+{pct_chg:.2f}%"
+
+                                    # 根据涨跌添加emoji
+                                    if pct_chg is None:
+                                        emoji = "⚪"
+                                    elif pct_chg > 0:
+                                        emoji = "🟢"
+                                    elif pct_chg < 0:
+                                        emoji = "🔴"
+                                    else:
+                                        emoji = "⚪"
+
+                                    markdown_lines.append(
+                                        f"| {emoji} {name or etf_code} | `{etf_code}` | `{close:.3f}` | `{change_str}` |"
+                                    )
                     except Exception as e:
                         logger.error(f"获取 {etf_code} 数据失败: {e}")
 
-                message_lines.append("---\n")
-                message_lines.append("💡 详细信息请访问系统查看")
+                markdown_lines.append("\n---\n💡 详细信息请访问系统查看")
+                markdown_content = "\n".join(markdown_lines)
 
-                message = "".join(message_lines)
-
-            # 发送消息（使用消息卡片格式）
+            # 发送消息（使用Markdown表格格式）
             import asyncio
-            result = asyncio.run(notifier.send_message(message, title="📊 ETF交易建议"))
+            result = asyncio.run(notifier.send_message(markdown_content, title="📊 ETF交易建议"))
 
             self.feishu_notification_status['last_send'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             self.feishu_notification_status['last_result'] = '成功' if result else '失败'

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-测试飞书消息发送（使用消息卡片格式）
+测试飞书消息发送（使用Markdown表格格式）
 立即发送ETF交易建议到飞书
 """
 import sys
@@ -17,9 +17,9 @@ from core.watchlist import load_watchlist
 from datetime import datetime
 
 async def send_test_message():
-    """发送测试消息（使用消息卡片格式）"""
+    """发送测试消息（使用Markdown表格格式）"""
     print("=" * 60)
-    print("📤 发送飞书测试消息（消息卡片格式）")
+    print("📤 发送飞书测试消息（Markdown表格格式）")
     print("=" * 60)
     print()
 
@@ -43,19 +43,23 @@ async def send_test_message():
     print(f"✓ 自选列表: {len(etfs)} 个ETF")
     print()
 
-    # 获取数据
+    # 获取数据并构建Markdown表格
     try:
         conn = get_etf_connection()
         if not conn:
             print("❌ 无法连接数据库")
             return False
 
-        etf_codes = [etf['code'] for etf in etfs[:10]]  # 最多显示10个
+        etf_codes = [etf['code'] for etf in etfs[:15]]  # 最多显示15个
 
-        # 构建Markdown格式的消息
-        message_lines = [f"**ETF交易建议（测试消息）**\n\n"]
-        message_lines.append(f"⏰ {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n")
+        # 构建Markdown表格
+        markdown_lines = [
+            "⏰ **时间**: " + datetime.now().strftime('%Y-%m-%d %H:%M') + "\n\n",
+            "| ETF名称 | 代码 | 价格 | 涨跌幅 |",
+            "| --- | --- | --- | --- |"
+        ]
 
+        # 数据行
         for etf_code in etf_codes:
             try:
                 # 获取最新数据
@@ -76,32 +80,42 @@ async def send_test_message():
                         # 处理 None 值
                         if pct_chg is None:
                             change_str = "N/A"
-                            emoji = "⚪"
                         else:
-                            change_str = f"+{pct_chg:.2f}%" if pct_chg >= 0 else f"{pct_chg:.2f}%"
-                            emoji = "🟢" if pct_chg >= 0 else "🔴"
-                        message_lines.append(f"{emoji} **{name or etf_code}** (`{etf_code}`)\n")
-                        message_lines.append(f"> 价格: `{close:.3f}`  涨跌: `{change_str}`\n\n")
+                            change_str = f"+{pct_chg:.2f}%"
+
+                        # 根据涨跌添加emoji
+                        if pct_chg is None:
+                            emoji = "⚪"
+                        elif pct_chg > 0:
+                            emoji = "🟢"
+                        elif pct_chg < 0:
+                            emoji = "🔴"
+                        else:
+                            emoji = "⚪"
+
+                        markdown_lines.append(
+                            f"| {emoji} {name or etf_code} | `{etf_code}` | `{close:.3f}` | `{change_str}` |"
+                        )
             except Exception as e:
                 print(f"❌ 获取 {etf_code} 数据失败: {e}")
 
         conn.close()
 
-        message_lines.append("---\n")
-        message_lines.append("💡 这是一条测试消息")
-        message_lines.append("\n💡 详细信息请访问系统查看")
+        markdown_lines.append("\n---\n💡 这是一条测试消息 - 详细信息请访问系统查看")
+        markdown_content = "\n".join(markdown_lines)
 
-        message = "".join(message_lines)
-
-        print("📨 消息内容：")
+        print("📨 消息内容（Markdown表格）：")
         print("-" * 60)
-        print(message)
+        for i, line in enumerate(markdown_lines[:10]):  # 只显示前10行
+            print(line)
+        if len(markdown_lines) > 10:
+            print(f"... (共{len(markdown_lines)}行)")
         print("-" * 60)
         print()
 
-        # 发送消息（使用消息卡片格式）
+        # 发送消息
         print("📤 正在发送到飞书...")
-        result = await notifier.send_message(message, title="📊 ETF交易建议（测试）")
+        result = await notifier.send_message(markdown_content, title="📊 ETF交易建议（测试）")
 
         if result:
             print("✅ 飞书消息发送成功！")
@@ -118,7 +132,7 @@ async def send_test_message():
 
 def main():
     print()
-    print("⚠️  这将立即发送一条测试消息到飞书（消息卡片格式）")
+    print("⚠️  这将立即发送一条测试消息到飞书（Markdown表格格式）")
     print()
 
     result = asyncio.run(send_test_message())

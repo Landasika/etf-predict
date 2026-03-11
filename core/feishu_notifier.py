@@ -217,6 +217,74 @@ class FeishuNotifier:
             logger.error(f"发送飞书消息失败: {e}")
             return False
 
+    async def _send_card(self, card: dict, bot_id: Optional[str] = None) -> bool:
+        """发送飞书消息卡片（原始格式）
+
+        Args:
+            card: 飞书卡片字典
+            bot_id: 机器人ID
+
+        Returns:
+            是否发送成功
+        """
+        if not self.is_enabled():
+            logger.debug("飞书通知未启用")
+            return False
+
+        bot = self.get_bot(bot_id)
+        if not bot:
+            logger.warning(f"未找到可用的飞书机器人: {bot_id}")
+            return False
+
+        if not all([bot.get("app_id"), bot.get("app_secret"), bot.get("chat_id")]):
+            logger.warning(f"飞书机器人配置不完整: {bot.get('name')}")
+            return False
+
+        try:
+            import json
+            import requests
+
+            # 获取 tenant_access_token
+            if not bot.get("tenant_access_token"):
+                token_url = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+                payload = {
+                    "app_id": bot["app_id"],
+                    "app_secret": bot["app_secret"]
+                }
+                response = requests.post(token_url, json=payload)
+                result = response.json()
+
+                if result.get("code") != 0:
+                    raise Exception(f"获取 token 失败: {result.get('msg')}")
+
+                bot["tenant_access_token"] = result.get("tenant_access_token")
+
+            # 发送消息卡片
+            url = "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=chat_id"
+            message_payload = {
+                "receive_id": bot["chat_id"],
+                "msg_type": "interactive",
+                "content": json.dumps(card)
+            }
+
+            headers = {
+                "Authorization": f"Bearer {bot['tenant_access_token']}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.post(url, json=message_payload, headers=headers)
+            result = response.json()
+
+            if result.get("code") != 0:
+                raise Exception(f"发送消息失败: {result.get('msg')}")
+
+            logger.info(f"飞书消息卡片发送成功: {bot.get('name')}")
+            return True
+
+        except Exception as e:
+            logger.error(f"发送飞书消息卡片失败: {e}")
+            return False
+
     async def send_signal_alert(self, etf_code: str, etf_name: str, signal: str, strategy: str):
         """发送策略信号提醒"""
         if not self.config.get("notifications", {}).get("signal_alerts"):
