@@ -181,83 +181,21 @@ class DataUpdateScheduler:
 
         try:
             from core.feishu_notifier import get_feishu_notifier
+            from core.feishu_report import generate_etf_operation_report
 
             notifier = get_feishu_notifier()
 
-            # 获取自选列表数据
-            from core.database import get_db_session
-            from core.watchlist import load_watchlist
-            from sqlalchemy import text
+            # 生成ETF操作建议报告
+            markdown_content = generate_etf_operation_report()
 
-            watchlist_data = load_watchlist()
-            if not watchlist_data or not watchlist_data.get('etfs'):
-                logger.warning("⚠️  自选列表为空，跳过飞书消息发送")
-                self.feishu_notification_status['last_result'] = '跳过（自选列表为空）'
+            if not markdown_content:
+                logger.warning("⚠️  生成报告失败或无数据")
+                self.feishu_notification_status['last_result'] = '生成报告失败'
                 return
 
-            # 获取数据
-            with get_db_session() as session:
-                etfs = watchlist_data.get('etfs', [])
-                etf_codes = [etf['code'] for etf in etfs[:15]]  # 最多显示15个
-
-                # 构建Markdown表格（更简单且兼容性更好）
-                markdown_lines = [
-                    "⏰ **时间**: " + datetime.now().strftime('%Y-%m-%d %H:%M') + "\n\n",
-                    "| ETF名称 | 代码 | 价格 | 涨跌幅 |",
-                    "| --- | --- | --- | --- |"
-                ]
-
-                # 数据行
-                for etf_code in etf_codes:
-                    try:
-                        # 获取最新信号
-                        import sqlite3
-                        from core.database import get_etf_connection
-                        conn = get_etf_connection()
-                        if conn:
-                            cursor = conn.cursor()
-                            cursor.execute("""
-                                SELECT d.close, d.pct_chg, b.extname
-                                FROM etf_daily d
-                                LEFT JOIN etf_basic b ON d.ts_code = b.ts_code
-                                WHERE d.ts_code = ?
-                                ORDER BY d.trade_date DESC
-                                LIMIT 1
-                            """, (etf_code,))
-                            result = cursor.fetchone()
-                            conn.close()
-
-                            if result:
-                                close, pct_chg, name = result
-                                if close is not None:
-                                    # 处理 None 值
-                                    if pct_chg is None:
-                                        change_str = "N/A"
-                                    else:
-                                        change_str = f"+{pct_chg:.2f}%"
-
-                                    # 根据涨跌添加emoji
-                                    if pct_chg is None:
-                                        emoji = "⚪"
-                                    elif pct_chg > 0:
-                                        emoji = "🟢"
-                                    elif pct_chg < 0:
-                                        emoji = "🔴"
-                                    else:
-                                        emoji = "⚪"
-
-                                    markdown_lines.append(
-                                        f"| {emoji} {name or etf_code} | `{etf_code}` | `{close:.3f}` | `{change_str}` |"
-                                    )
-                    except Exception as e:
-                        logger.error(f"获取 {etf_code} 数据失败: {e}")
-
-                markdown_lines.append("\n---\n💡 详细信息请访问系统查看")
-                markdown_content = "\n".join(markdown_lines)
-
-            # 发送消息（使用Markdown表格格式）
+            # 发送消息
             import asyncio
-            result = asyncio.run(notifier.send_message(markdown_content, title="📊 ETF交易建议"))
+            result = asyncio.run(notifier.send_message(markdown_content, title="🎯 ETF操作建议"))
 
             self.feishu_notification_status['last_send'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             self.feishu_notification_status['last_result'] = '成功' if result else '失败'
