@@ -27,6 +27,34 @@ class ETFOperationReport:
         if not self.watchlist or not self.watchlist.get('etfs'):
             return False
 
+        # 从API获取信号数据（包含previous_positions_used）
+        try:
+            import requests
+            api_url = "http://127.0.0.1:8000/api/watchlist/batch-signals"
+            response = requests.get(api_url, timeout=10)
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('success'):
+                    # 从API数据中提取所需信息
+                    for item in data.get('data', []):
+                        code = item['code']
+                        latest_data = item.get('latest_data', {})
+
+                        self.etf_data[code] = {
+                            'name': item.get('name', code),
+                            'close': latest_data.get('close', 0),
+                            'pct_chg': latest_data.get('pct_chg', 0) or latest_data.get('change_pct', 0),
+                            'previous_positions_used': latest_data.get('previous_positions_used', 0),
+                            'positions_used': latest_data.get('positions_used', 0),
+                            'daily_profit': item.get('daily_profit', 0)
+                        }
+
+                    return True
+        except Exception as e:
+            print(f"从API获取数据失败: {e}")
+
+        # 如果API调用失败，使用数据库数据（fallback）
         # 获取ETF数据
         etfs = self.watchlist.get('etfs', [])
         for etf in etfs:
@@ -57,7 +85,10 @@ class ETFOperationReport:
                         'close': current[0],
                         'pct_chg': current[1],
                         'trade_date': current[2],
-                        'prev_close': prev[0] if prev else None
+                        'prev_close': prev[0] if prev else None,
+                        'previous_positions_used': 0,  # 数据库中没有这个字段
+                        'positions_used': 0,
+                        'daily_profit': 0
                     }
 
         return True
@@ -85,8 +116,9 @@ class ETFOperationReport:
         lines.append("| --- | --- | --- |")
 
         lines.append(f"| 监控ETF | {etf_count}个 | 自选列表总数 |")
-        lines.append(f"| 昨日总仓位 | {stats.get('total_positions', 0)}仓 | {etf_count}个ETF × 平均仓位 |")
-        lines.append(f"| 昨日总资金 | ¥{stats.get('total_capital', 0):,.0f} | 总持仓价值 |")
+        lines.append(f"| 有持仓ETF | {stats.get('active_etf_count', 0)}个 | 昨日实际有持仓 |")
+        lines.append(f"| 昨日总仓位 | {stats.get('total_positions', 0)}仓 | 实际持仓总和 |")
+        lines.append(f"| 昨日总资金 | ¥{stats.get('total_capital', 0):,.0f} | 持仓总价值（200元/仓）|")
         lines.append(f"| 今日总收益 | ¥{stats.get('total_return', 0):+,.2f} | 当日浮动盈亏 |\n")
 
         # 今日操作建议总结
@@ -176,12 +208,13 @@ class ETFOperationReport:
         return "\n".join(lines)
 
     def _calculate_stats(self) -> Dict:
-        """计算统计数据（使用API相同的逻辑）"""
+        """计算统计数据（使用实际持仓数据）"""
         etfs = self.watchlist.get('etfs', [])
 
-        total_positions = 0  # 昨日总仓位
-        total_capital = 0  # 昨日总资金（昨日仓位 × 200元/仓）
+        total_positions = 0  # 昨日总仓位（实际持仓）
+        total_capital = 0  # 昨日总资金（实际持仓 × 200元/仓）
         total_return = 0  # 今日总收益
+        active_etf_count = 0  # 有持仓的ETF数量
 
         for etf in etfs:
             code = etf['code']
@@ -190,25 +223,33 @@ class ETFOperationReport:
 
             data = self.etf_data[code]
 
-            # 使用API相同的逻辑
-            # 昨日持仓：暂时使用配置的总仓位（实际应该从回测结果获取）
-            previous_positions_used = etf.get('total_positions', 10)
+            # 使用实际持仓数据（从API获取）
+            previous_positions_used = data.get('previous_positions_used', 0)
 
-            # 每仓200元
-            investment = previous_positions_used * 200
+            # 只统计有持仓的ETF
+            if previous_positions_used > 0:
+                active_etf_count += 1
 
-            total_positions += previous_positions_used
-            total_capital += investment
+                # 每仓200元
+                investment = previous_positions_used * 200
 
-            # 计算当日收益
-            pct_chg = data['pct_chg'] or 0
-            daily_profit = investment * (pct_chg / 100)
-            total_return += daily_profit
+                total_positions += previous_positions_used
+                total_capital += investment
+
+                # 使用API返回的daily_profit（如果有的话）
+                daily_profit = data.get('daily_profit', 0)
+                if daily_profit == 0:
+                    # 如果API没有返回，手动计算
+                    pct_chg = data.get('pct_chg') or 0
+                    daily_profit = investment * (pct_chg / 100)
+
+                total_return += daily_profit
 
         return {
             'total_positions': total_positions,
             'total_capital': total_capital,
-            'total_return': total_return
+            'total_return': total_return,
+            'active_etf_count': active_etf_count
         }
 
     def _get_buy_list(self) -> List[Dict]:
