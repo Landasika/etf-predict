@@ -30,35 +30,61 @@ class ETFOperationReport:
         # 直接调用内部函数获取信号数据（避免HTTP认证问题）
         try:
             from core.watchlist import calculate_realtime_signal
+            from core.database import get_etf_daily_data
+            from datetime import datetime, timedelta
 
             print("✓ 直接调用内部函数获取数据")
+
+            # 计算开始日期（一年前，和API相同）
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=365)
+            start_date_str = start_date.strftime('%Y%m%d')
 
             etfs = self.watchlist.get('etfs', [])
             for etf in etfs:
                 code = etf['code']
                 name = etf.get('name', code)
+                strategy = etf.get('strategy', 'macd_aggressive')
 
                 try:
-                    # 调用内部信号计算函数
-                    signal_result = calculate_realtime_signal(code)
+                    # 调用内部信号计算函数（使用和API相同的参数）
+                    signal_result = calculate_realtime_signal(code, start_date_str, strategy)
 
                     # 检查返回结果
                     if signal_result and signal_result.get('success'):
                         data = signal_result.get('data', {})
                         latest_data = data.get('latest_data', {})
 
+                        # 计算当日涨幅（和API相同的逻辑）
+                        daily_change_pct = 0.0
+                        try:
+                            recent_data = get_etf_daily_data(code)
+                            if recent_data and len(recent_data) >= 2:
+                                today_close = float(recent_data[-1].get('close', 0))
+                                yesterday_close = float(recent_data[-2].get('close', 0))
+                                if yesterday_close > 0:
+                                    daily_change_pct = ((today_close - yesterday_close) / yesterday_close) * 100
+                        except Exception as e:
+                            daily_change_pct = 0.0
+
+                        # 计算今日收益（基于昨日持仓，和API相同的公式）
+                        yesterday_positions = latest_data.get('previous_positions_used', 0)
+                        daily_profit = yesterday_positions * 200 * (daily_change_pct / 100)
+
                         self.etf_data[code] = {
                             'name': latest_data.get('name', name),
                             'close': latest_data.get('close', 0),
-                            'pct_chg': latest_data.get('pct_chg', 0),
-                            'previous_positions_used': data.get('positions_used', 0),
-                            'positions_used': data.get('positions_used', 0),
-                            'daily_profit': data.get('profit', 0)
+                            'pct_chg': daily_change_pct,  # 使用计算的涨幅
+                            'previous_positions_used': yesterday_positions,  # 昨日持仓
+                            'positions_used': data.get('positions_used', 0),  # 今日持仓
+                            'daily_profit': daily_profit  # 今日收益
                         }
                     else:
                         print(f"⚠️  {code} 信号计算失败: {signal_result.get('message', '未知错误')}")
                 except Exception as e:
                     print(f"⚠️  获取 {code} 数据失败: {e}")
+                    import traceback
+                    traceback.print_exc()
                     continue
 
             if self.etf_data:
