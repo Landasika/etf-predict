@@ -62,32 +62,42 @@ class ETFOperationReport:
             name = etf['name']
             strategy = etf.get('strategy', 'macd_aggressive')
 
-            # 获取最新行情数据
+            # 获取最新行情数据和ETF基本信息
             conn = get_etf_connection()
             if conn:
                 cursor = conn.cursor()
                 cursor.execute("""
-                    SELECT close, pct_chg, trade_date
-                    FROM etf_daily
-                    WHERE ts_code = ?
-                    ORDER BY trade_date DESC
-                    LIMIT 2
+                    SELECT d.close, d.pct_chg, d.trade_date, b.extname
+                    FROM etf_daily d
+                    LEFT JOIN etf_basic b ON d.ts_code = b.ts_code
+                    WHERE d.ts_code = ?
+                    ORDER BY d.trade_date DESC
+                    LIMIT 1
                 """, (code,))
-                results = cursor.fetchall()
+                result = cursor.fetchone()
                 conn.close()
 
-                if len(results) >= 1:
-                    current = results[0]
-                    prev = results[1] if len(results) > 1 else None
+                if result:
+                    close, pct_chg, trade_date, extname = result
+
+                    # 尝试从extname中解析持仓信息（格式：ETF名称 [X仓]）
+                    previous_positions_used = 0
+                    if extname and '[' in extname and '仓]' in extname:
+                        try:
+                            import re
+                            match = re.search(r'\[(\d+)仓\]', extname)
+                            if match:
+                                previous_positions_used = int(match.group(1))
+                        except:
+                            pass
 
                     self.etf_data[code] = {
-                        'name': name,
-                        'close': current[0],
-                        'pct_chg': current[1],
-                        'trade_date': current[2],
-                        'prev_close': prev[0] if prev else None,
-                        'previous_positions_used': 0,  # 数据库中没有这个字段
-                        'positions_used': 0,
+                        'name': extname.split(' [')[0] if extname and '[' in extname else name,
+                        'close': close,
+                        'pct_chg': pct_chg,
+                        'trade_date': trade_date,
+                        'previous_positions_used': previous_positions_used,
+                        'positions_used': previous_positions_used,
                         'daily_profit': 0
                     }
 
