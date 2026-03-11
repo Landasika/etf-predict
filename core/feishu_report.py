@@ -70,6 +70,35 @@ class ETFOperationReport:
         lines.append("# 🎯 ETF 操作建议")
         lines.append(f"**生成时间**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
+        # 获取操作建议列表
+        buy_list = self._get_buy_list()
+        sell_list = self._get_sell_list()
+        hold_list = self._get_hold_list()
+
+        # 今日操作建议总结
+        lines.append("## 📋 今日操作建议\n")
+        lines.append("| 操作类型 | 数量 | 说明 |")
+        lines.append("| --- | --- | --- |")
+
+        if sell_list:
+            total_sell_positions = sum(item.get('suggested_positions', 0) for item in sell_list)
+            lines.append(f"| 🔴 卖出 | {len(sell_list)}个 | 共{total_sell_positions}份 |")
+        else:
+            lines.append("| 🔴 卖出 | 0个 | 暂无卖出建议 |")
+
+        if buy_list:
+            total_buy_positions = sum(item.get('suggested_positions', 0) for item in buy_list)
+            lines.append(f"| 🟢 买入 | {len(buy_list)}个 | 共{total_buy_positions}份 |")
+        else:
+            lines.append("| 🟢 买入 | 0个 | 暂无买入建议 |")
+
+        if hold_list:
+            lines.append(f"| 🟡 持有 | {len(hold_list)}个 | 观望待涨 |")
+        else:
+            lines.append("| 🟡 持有 | 0个 | 暂无持仓 |")
+
+        lines.append("")
+
         # 持仓统计
         lines.append("## 📊 持仓统计\n")
         lines.append("| 项目 | 数值 |")
@@ -79,29 +108,6 @@ class ETFOperationReport:
         lines.append(f"| 昨日总仓位 | {stats.get('total_positions', 0)}仓 |")
         lines.append(f"| 昨日总资金 | ¥{stats.get('total_capital', 0):,.0f} |")
         lines.append(f"| 今日总收益 | ¥{stats.get('total_return', 0):+,.2f} |\n")
-
-        # 分类显示操作建议
-        buy_list = self._get_buy_list()
-        sell_list = self._get_sell_list()
-        hold_list = self._get_hold_list()
-
-        # 建议买入
-        if buy_list:
-            lines.append("## 🟢 建议买入\n")
-            lines.append("| ETF名称 | 操作 | 基金名称 | 代码 | 涨跌 | 价格 | 仓位 |")
-            lines.append("| --- | --- | --- | --- | --- | --- | --- |")
-
-            for item in buy_list[:10]:  # 最多显示10个
-                lines.append(
-                    f"| {item['name']} | "
-                    f"买入{item['suggested_positions']}份 | "
-                    f"{item['fund_name']} | "
-                    f"`{item['code']}` | "
-                    f"{item['change_pct']}% | "
-                    f"¥{item['price']:.3f} | "
-                    f"{item.get('current_positions', 0)}/{item.get('total_positions', 10)} |"
-                )
-            lines.append("")
 
         # 建议卖出
         if sell_list:
@@ -120,6 +126,24 @@ class ETFOperationReport:
                     f"¥{item['price']:.3f} | "
                     f"¥{daily_return:+,.2f} | "
                     f"{item.get('current_positions', 0)}/{item.get('total_positions', 10)} |"
+                )
+            lines.append("")
+
+        # 建议买入
+        if buy_list:
+            lines.append("## 🟢 建议买入\n")
+            lines.append("| ETF名称 | 操作 | 基金名称 | 代码 | 涨跌 | 价格 | 建议仓位 |")
+            lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+
+            for item in buy_list[:10]:  # 最多显示10个
+                lines.append(
+                    f"| {item['name']} | "
+                    f"买入{item['suggested_positions']}份 | "
+                    f"{item['fund_name']} | "
+                    f"`{item['code']}` | "
+                    f"{item['change_pct']}% | "
+                    f"¥{item['price']:.3f} | "
+                    f"{item.get('total_positions', 10)}份 |"
                 )
             lines.append("")
 
