@@ -207,6 +207,24 @@ class MACDBacktester:
         # Track highest price for trailing stop
         highest_price = 0
 
+        def record_performance(price: float, signal_strength: float):
+            """Record end-of-day portfolio snapshot after all actions for the row."""
+            position_value = position_shares * price if position_shares > 0 else 0
+            portfolio_value = cash + position_value
+
+            performance_records.append({
+                'date': row['date'],
+                'cash': cash,
+                'position_shares': position_shares,
+                'positions_used': positions_used,
+                'avg_cost': avg_cost,
+                'portfolio_value': portfolio_value,
+                'price': price,
+                'pnl_pct': ((price - avg_cost) / avg_cost) if position_shares > 0 and avg_cost > 0 else 0,
+                'vol': row.get('vol', 0),
+                'signal_strength': signal_strength
+            })
+
         for idx, row in data.iterrows():
             price = row['close']
             signal_strength = row['signal_strength']
@@ -245,6 +263,7 @@ class MACDBacktester:
                 take_profit2_triggered = False
                 take_profit3_triggered = False
                 highest_price = 0
+                record_performance(price, signal_strength)
                 continue
 
             # ========== PRIORITY 1.5: Trailing Stop (追踪止盈) ==========
@@ -304,6 +323,7 @@ class MACDBacktester:
                         take_profit1_triggered = False
                         take_profit2_triggered = False
                         highest_price = 0
+                    record_performance(price, signal_strength)
                     continue
 
                 # Level 2: 20% - 卖出30%
@@ -327,6 +347,7 @@ class MACDBacktester:
                     })
 
                     take_profit2_triggered = True
+                    record_performance(price, signal_strength)
                     continue
 
                 # Level 1: 10% - 卖出30%
@@ -442,21 +463,7 @@ class MACDBacktester:
                             })
 
             # Track portfolio value
-            position_value = position_shares * price if position_shares > 0 else 0
-            portfolio_value = cash + position_value
-
-            performance_records.append({
-                'date': row['date'],
-                'cash': cash,
-                'position_shares': position_shares,
-                'positions_used': positions_used,
-                'avg_cost': avg_cost,
-                'portfolio_value': portfolio_value,
-                'price': price,
-                'pnl_pct': pnl_pct if position_shares > 0 else 0,
-                'vol': row.get('vol', 0),  # 添加成交量数据
-                'signal_strength': signal_strength  # 添加信号强度
-            })
+            record_performance(price, signal_strength)
 
         return trades, pd.DataFrame(performance_records)
 

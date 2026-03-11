@@ -970,11 +970,11 @@ async function checkTokenStatus() {
             // Token未配置，显示提示
             const updateDataBtn = document.getElementById('updateDataBtn');
             if (updateDataBtn) {
-                updateDataBtn.title = '⚠️ 请先配置Tushare Token';
+                updateDataBtn.title = '⚠️ 请先配置 tinyshare 授权码';
             }
 
-            console.warn('⚠️ Tushare Token未配置，数据更新功能不可用');
-            console.warn('配置方法：运行 python scripts/setup_token.py');
+            console.warn('⚠️ tinyshare 授权码未配置，数据更新功能不可用');
+            console.warn('配置方法：先执行 pip install tinyshare --upgrade，再在 config.json 中设置 tinyshare.token');
         }
     } catch (error) {
         console.error('检查Token状态失败:', error);
@@ -1114,13 +1114,15 @@ async function triggerDataUpdate() {
 
         if (tokenResult.success && !tokenResult.data.configured) {
             alert(
-                '⚠️ Tushare Token 未配置！\n\n' +
-                '数据更新功能需要配置Tushare Token。\n\n' +
-                '配置方法：\n' +
-                '1. 访问 https://tushare.pro/register 注册账号\n' +
-                '2. 访问 https://tushare.pro/user/token 获取Token\n' +
-                '3. 运行配置脚本：python scripts/setup_token.py\n' +
-                '4. 重启系统：python run.py'
+                '⚠️ tinyshare 授权码未配置！\n\n' +
+                'tinyshare sdk 使用 - 首次不满意可退款\n\n' +
+                '1. 安装 tinyshare（首次使用）\n' +
+                '   pip install tinyshare --upgrade\n' +
+                '2. import tushare as ts 改为：\n' +
+                '   import tinyshare as ts\n' +
+                '3. 原 token 替换为 tinyshare 的 token（积分授权码）\n\n' +
+                '支持配置文件配置，建议在 config.json 中设置 tinyshare.token。\n' +
+                '迁移只需修改一句代码。'
             );
             return;
         }
@@ -1130,7 +1132,7 @@ async function triggerDataUpdate() {
 
     const confirmed = confirm(
         '立即更新ETF数据？\n\n' +
-        '这将从Tushare下载最新的交易数据并更新到数据库。\n' +
+        '这将使用 tinyshare 下载最新的交易数据并更新到数据库。\n' +
         '预计耗时：1-3分钟\n\n' +
         '是否继续？'
     );

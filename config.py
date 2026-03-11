@@ -5,11 +5,64 @@ ETF预测系统配置
 import os
 import json
 import hashlib
+from copy import deepcopy
 from pathlib import Path
 
 # 项目路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
+
+DEFAULT_UPDATE_TIME = "15:05"
+DEFAULT_FEISHU_NOTIFICATION_TIMES = ["09:40", "10:40", "11:40", "13:40", "14:40"]
+DEFAULT_CONFIG = {
+    "database": {"path": "data/etf.db"},
+    "watchlist": {"path": "data/watchlist_etfs.json"},
+    "weights": {"path": "optimized_weights"},
+    "api": {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "title": "ETF预测系统API",
+        "version": "1.0.0"
+    },
+    "auth": {
+        "session_secret_key": "change-this-in-production-please-use-random-key",
+        "auth_key": "admin123",
+        "max_login_attempts": 5,
+        "login_attempt_window": 300,
+        "lockout_duration": 900
+    },
+    "tinyshare": {"token": ""},
+    "tushare": {"token": ""},
+    "minishare": {
+        "token": "4E5m137e34HjyNm2c3r8paa9BYe8e35wHt5T1QxSf98jpElbypp3Y0Fg0443a82a"
+    },
+    "update_schedule": {
+        "enabled": False,
+        "time": DEFAULT_UPDATE_TIME
+    },
+    "feishu_notification_schedule": {
+        "enabled": False,
+        "times": DEFAULT_FEISHU_NOTIFICATION_TIMES.copy()
+    },
+    "strategies": {
+        "macd_aggressive": "MACD激进策略",
+        "optimized_t_trading": "优化做T策略",
+        "multifactor": "多因子量化策略"
+    }
+}
+
+
+def _merge_defaults(user_config, default_config):
+    """递归补齐缺失配置，不覆盖用户已有值"""
+    merged = deepcopy(default_config)
+
+    for key, value in user_config.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge_defaults(value, merged[key])
+        else:
+            merged[key] = value
+
+    return merged
 
 
 def load_config():
@@ -17,44 +70,17 @@ def load_config():
     config_path = Path(CONFIG_FILE)
 
     if not config_path.exists():
-        # 创建默认配置
-        default_config = {
-            "database": {"path": "data/etf.db"},
-            "watchlist": {"path": "data/watchlist_etfs.json"},
-            "weights": {"path": "optimized_weights"},
-            "api": {
-                "host": "0.0.0.0",
-                "port": 8000,
-                "title": "ETF预测系统API",
-                "version": "1.0.0"
-            },
-            "auth": {
-                "session_secret_key": "change-this-in-production-please-use-random-key",
-                "auth_key": "admin123",
-                "max_login_attempts": 5,
-                "login_attempt_window": 300,
-                "lockout_duration": 900
-            },
-            "tushare": {"token": ""},
-            "minishare": {
-                "token": "4E5m137e34HjyNm2c3r8paa9BYe8e35wHt5T1QxSf98jpElbypp3Y0Fg0443a82a"
-            },
-            "strategies": {
-                "macd_aggressive": "MACD激进策略",
-                "optimized_t_trading": "优化做T策略",
-                "multifactor": "多因子量化策略"
-            }
-        }
-
         # 保存默认配置
         with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(default_config, f, ensure_ascii=False, indent=2)
+            json.dump(DEFAULT_CONFIG, f, ensure_ascii=False, indent=2)
 
-        return default_config
+        return deepcopy(DEFAULT_CONFIG)
 
     # 读取配置
     with open(config_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        user_config = json.load(f)
+
+    return _merge_defaults(user_config, DEFAULT_CONFIG)
 
 
 # 加载配置
@@ -82,9 +108,18 @@ LOCKOUT_DURATION = _config['auth']['lockout_duration']
 # 模板引擎（将在api/main.py中初始化）
 templates = None
 
+def _get_provider_token(config_data, provider_name):
+    """从配置中安全读取数据源 token"""
+    provider_config = config_data.get(provider_name, {})
+    if not isinstance(provider_config, dict):
+        return ""
+    return provider_config.get('token', '')
+
+
 # ==================== Token配置 ====================
-TUSHARE_TOKEN = _config['tushare']['token']
-MINISHARE_TOKEN = _config['minishare']['token']
+TINYSHARE_TOKEN = _get_provider_token(_config, 'tinyshare') or _get_provider_token(_config, 'tushare')
+TUSHARE_TOKEN = _get_provider_token(_config, 'tushare')
+MINISHARE_TOKEN = _get_provider_token(_config, 'minishare')
 
 # ==================== 策略配置 ====================
 STRATEGIES = _config['strategies']
@@ -132,7 +167,7 @@ def reload_config():
     global API_HOST, API_PORT, API_TITLE, API_VERSION
     global SESSION_SECRET_KEY, AUTH_KEY, AUTH_KEY_HASH
     global MAX_LOGIN_ATTEMPTS, LOGIN_ATTEMPT_WINDOW, LOCKOUT_DURATION
-    global TUSHARE_TOKEN, MINISHARE_TOKEN, STRATEGIES
+    global TINYSHARE_TOKEN, TUSHARE_TOKEN, MINISHARE_TOKEN, STRATEGIES
 
     DATABASE_PATH = os.path.join(BASE_DIR, _config['database']['path'])
     WATCHLIST_PATH = os.path.join(BASE_DIR, _config['watchlist']['path'])
@@ -150,8 +185,9 @@ def reload_config():
     LOGIN_ATTEMPT_WINDOW = _config['auth']['login_attempt_window']
     LOCKOUT_DURATION = _config['auth']['lockout_duration']
 
-    TUSHARE_TOKEN = _config['tushare']['token']
-    MINISHARE_TOKEN = _config['minishare']['token']
+    TINYSHARE_TOKEN = _get_provider_token(_config, 'tinyshare') or _get_provider_token(_config, 'tushare')
+    TUSHARE_TOKEN = _get_provider_token(_config, 'tushare')
+    MINISHARE_TOKEN = _get_provider_token(_config, 'minishare')
     STRATEGIES = _config['strategies']
 
 
@@ -189,7 +225,7 @@ def update_config(updates):
 # 回测默认参数
 DEFAULT_INITIAL_CAPITAL = 2000
 DEFAULT_POSITIONS = 10
-DEFAULT_START_DATE = '20240101'
+DEFAULT_START_DATE = '20250101'
 
 # 支持的交易所
 EXCHANGES = ['SH', 'SZ']

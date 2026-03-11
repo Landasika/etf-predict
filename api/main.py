@@ -19,6 +19,7 @@ from core.database import get_etf_info
 from core.auth import router as auth_router, require_auth
 
 app = FastAPI(title=config.API_TITLE, version=config.API_VERSION)
+logger = logging.getLogger(__name__)
 
 # 导入必要的模块
 from starlette.responses import JSONResponse, Response
@@ -100,6 +101,26 @@ config.templates = templates
 
 # 注册认证路由
 app.include_router(auth_router, tags=["认证"])
+
+
+@app.on_event("startup")
+async def restore_scheduler_on_startup():
+    """应用启动时恢复调度器配置"""
+    try:
+        from core.data_update_scheduler import get_scheduler
+
+        scheduler = get_scheduler()
+        scheduler.restore_from_config(config.get_config())
+
+        status = scheduler.get_status()
+        logger.info(
+            "调度器启动恢复完成: data_update=%s, feishu=%s, running=%s",
+            status['enabled'],
+            status['feishu_notification']['enabled'],
+            status['is_running']
+        )
+    except Exception as e:
+        logger.error(f"调度器启动恢复失败: {e}")
 
 
 def get_signal_name(signal_type: str) -> str:
@@ -196,7 +217,6 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
     """
     from core.watchlist import load_watchlist, calculate_realtime_signal
     from core.database import get_batch_cache, set_batch_cache, get_latest_data_date, clear_batch_cache
-    from datetime import datetime, timedelta
 
     # 如果是实时模式，强制清除缓存
     if realtime:
@@ -210,14 +230,12 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
             'message': '无法获取数据日期'
         }
 
-    # 计算一年前的日期（YYYYMMDD格式）
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=365)
-    start_date_str = start_date.strftime('%Y%m%d')
+    start_date_str = config.DEFAULT_START_DATE
+    cache_data_date = f"{data_date}_{start_date_str}"
 
     # 如果不强制刷新且不是实时模式，尝试从缓存获取
     if not refresh and not realtime:
-        cached = get_batch_cache('signals', data_date)
+        cached = get_batch_cache('signals', cache_data_date)
         if cached:
             return {
                 'success': True,
@@ -371,7 +389,7 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
             'data': results,
             'count': len(results)
         }
-        set_batch_cache('signals', data_date, cache_data)
+        set_batch_cache('signals', cache_data_date, cache_data)
 
     return {
         'success': True,
@@ -400,9 +418,11 @@ async def get_batch_backtest(refresh: bool = False):
             'message': '无法获取数据日期'
         }
 
+    cache_data_date = f"{data_date}_{config.DEFAULT_START_DATE}"
+
     # 如果不强制刷新，尝试从缓存获取
     if not refresh:
-        cached = get_batch_cache('backtest', data_date)
+        cached = get_batch_cache('backtest', cache_data_date)
         if cached:
             return {
                 'success': True,
@@ -421,7 +441,7 @@ async def get_batch_backtest(refresh: bool = False):
         strategy = etf.get('strategy', 'macd_aggressive')
 
         # 获取回测结果
-        backtest_result = run_backtest(etf_code, '20240101', strategy)
+        backtest_result = run_backtest(etf_code, config.DEFAULT_START_DATE, strategy)
         if not backtest_result['success']:
             continue
 
@@ -445,7 +465,7 @@ async def get_batch_backtest(refresh: bool = False):
         'data': results,
         'count': len(results)
     }
-    set_batch_cache('backtest', data_date, cache_data)
+    set_batch_cache('backtest', cache_data_date, cache_data)
 
     return {
         'success': True,
@@ -663,7 +683,7 @@ async def remove_etf_from_watchlist(etf_code: str):
 
 
 @app.get("/api/watchlist/{etf_code}/signal")
-async def get_etf_realtime_signal(etf_code: str, start_date: Optional[str] = '20250101', strategy: Optional[str] = None):
+async def get_etf_realtime_signal(etf_code: str, start_date: Optional[str] = config.DEFAULT_START_DATE, strategy: Optional[str] = None):
     """获取ETF实时信号和持仓状态"""
     from core.watchlist import calculate_realtime_signal
 
@@ -675,7 +695,7 @@ async def get_etf_realtime_signal(etf_code: str, start_date: Optional[str] = '20
 
 
 @app.get("/api/macd/backtest/watchlist/{etf_code}")
-async def run_backtest_for_watchlist(etf_code: str, start_date: Optional[str] = '20250101', strategy: Optional[str] = None):
+async def run_backtest_for_watchlist(etf_code: str, start_date: Optional[str] = config.DEFAULT_START_DATE, strategy: Optional[str] = None):
     """为自选ETF运行回测"""
     from core.watchlist import run_backtest
 
@@ -687,7 +707,7 @@ async def run_backtest_for_watchlist(etf_code: str, start_date: Optional[str] = 
 
 
 @app.get("/api/profit/all-etfs-daily")
-async def get_all_etfs_daily_profit(start_date: Optional[str] = '20240101'):
+async def get_all_etfs_daily_profit(start_date: Optional[str] = config.DEFAULT_START_DATE):
     """获取所有自选ETF的每日汇总收益（用于收益日历和图表）
 
     返回所有ETF每天的总收益/亏损金额、仓位变化、累计收益曲线
@@ -851,7 +871,7 @@ async def get_etf_weight_status(etf_code: str):
 
 
 @app.get("/api/watchlist/{etf_code}/kline-data")
-async def get_etf_kline_data(etf_code: str, start_date: Optional[str] = '20240101'):
+async def get_etf_kline_data(etf_code: str, start_date: Optional[str] = config.DEFAULT_START_DATE):
     """获取ETF K线数据（OHLCV）"""
     from core.database import get_etf_daily_data
 
@@ -965,8 +985,8 @@ async def update_market_data(background_tasks: BackgroundTasks):
     # 返回提示信息
     return {
         'success': True,
-        'message': '数据更新功能需要配置TUSHARE_TOKEN',
-        'note': '如需更新数据，请在config.py中配置TUSHARE_TOKEN后运行: python scripts/download_etf_data.py'
+        'message': '数据更新功能需要配置 tinyshare 授权码',
+        'note': '首次使用请执行 pip install tinyshare --upgrade，并在 config.json 中配置 tinyshare.token 后运行: python scripts/download_etf_data.py'
     }
 
 
@@ -1371,8 +1391,8 @@ async def reset_optimized_params(etf_code: str, request: Request):
 
 @app.get("/api/data-update/token-status")
 async def get_token_status():
-    """检查Tushare Token配置状态（从config.json读取）"""
-    token = config.TUSHARE_TOKEN or ''
+    """检查 tinyshare 授权码配置状态（优先读取 tinyshare.token）"""
+    token = config.TINYSHARE_TOKEN or ''
     token_configured = bool(token)
     token_preview = None
 
@@ -1385,7 +1405,7 @@ async def get_token_status():
         'data': {
             'configured': token_configured,
             'token_preview': token_preview,
-            'message': '已配置' if token_configured else '未配置'
+            'message': '已配置 tinyshare 授权码' if token_configured else '未配置 tinyshare 授权码'
         }
     }
 
@@ -1442,6 +1462,14 @@ async def configure_scheduler(request: Request):
 
         # 启用/禁用调度器
         scheduler.set_enabled(enabled)
+
+        if not config.update_config({
+            'update_schedule': {
+                'enabled': enabled,
+                'time': update_time
+            }
+        }):
+            raise HTTPException(status_code=500, detail='保存调度器配置失败')
 
         return {
             'success': True,
@@ -1503,6 +1531,14 @@ async def configure_feishu_notification(request: Request):
 
         # 启用/禁用飞书消息发送
         scheduler.set_feishu_notification_enabled(enabled)
+
+        if not config.update_config({
+            'feishu_notification_schedule': {
+                'enabled': enabled,
+                'times': scheduler.feishu_notification_times.copy()
+            }
+        }):
+            raise HTTPException(status_code=500, detail='保存飞书定时发送配置失败')
 
         return {
             'success': True,

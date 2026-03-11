@@ -9,10 +9,11 @@ import schedule
 import time
 import threading
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 import sys
 import os
+import config
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -38,7 +39,7 @@ class DataUpdateScheduler:
     def __init__(self):
         self.is_running = False
         self.scheduler_thread = None
-        self.update_time = "15:05"  # 默认更新时间
+        self.update_time = config.DEFAULT_UPDATE_TIME
         self.enabled = False  # 默认关闭
         self.current_job = None
         self.update_status = {
@@ -59,7 +60,7 @@ class DataUpdateScheduler:
 
         # 飞书消息定时发送配置
         self.feishu_notification_enabled = False
-        self.feishu_notification_times = ["09:40", "10:40", "11:40", "13:40", "14:40"]
+        self.feishu_notification_times = config.DEFAULT_FEISHU_NOTIFICATION_TIMES.copy()
         self.feishu_notification_status = {
             'is_sending': False,
             'last_send': None,
@@ -67,6 +68,46 @@ class DataUpdateScheduler:
             'success_count': 0,
             'fail_count': 0
         }
+
+    def _has_enabled_schedules(self) -> bool:
+        """是否至少启用了一个定时任务"""
+        return self.enabled or self.feishu_notification_enabled
+
+    def _sync_scheduler_state(self):
+        """根据当前开关状态启动、停止或重载调度器"""
+        if self._has_enabled_schedules():
+            if self.is_running:
+                self._reschedule()
+            else:
+                self.start()
+        elif self.is_running:
+            self.stop()
+
+    def restore_from_config(self, config_data=None):
+        """从配置文件恢复调度器设置"""
+        config_data = config_data or config.get_config()
+
+        update_schedule = config_data.get('update_schedule', {})
+        feishu_schedule = config_data.get('feishu_notification_schedule', {})
+
+        update_time = update_schedule.get('time', config.DEFAULT_UPDATE_TIME)
+        if not self.set_update_time(update_time):
+            self.set_update_time(config.DEFAULT_UPDATE_TIME)
+
+        feishu_times = feishu_schedule.get('times', config.DEFAULT_FEISHU_NOTIFICATION_TIMES)
+        if not isinstance(feishu_times, list) or not feishu_times:
+            feishu_times = config.DEFAULT_FEISHU_NOTIFICATION_TIMES.copy()
+        if not self.set_feishu_notification_times(feishu_times):
+            self.set_feishu_notification_times(config.DEFAULT_FEISHU_NOTIFICATION_TIMES.copy())
+
+        self.set_enabled(bool(update_schedule.get('enabled', False)))
+        self.set_feishu_notification_enabled(bool(feishu_schedule.get('enabled', False)))
+
+        logger.info(
+            "✅ 调度器配置已恢复: 数据更新=%s, 飞书定时=%s",
+            self.enabled,
+            self.feishu_notification_enabled
+        )
 
     def set_realtime_enabled(self, enabled: bool):
         """启用/禁用实时更新
@@ -166,10 +207,7 @@ class DataUpdateScheduler:
         """
         self.feishu_notification_enabled = enabled
         logger.info(f"飞书消息定时发送已{'启用' if enabled else '禁用'}")
-
-        # 如果调度器正在运行，重新调度
-        if self.is_running:
-            self._reschedule()
+        self._sync_scheduler_state()
 
     def _send_feishu_notification(self):
         """发送飞书消息任务"""
@@ -243,11 +281,7 @@ class DataUpdateScheduler:
         """
         self.enabled = enabled
         logger.info(f"调度器已{'启用' if enabled else '禁用'}")
-
-        if enabled and not self.is_running:
-            self.start()
-        elif not enabled and self.is_running:
-            self.stop()
+        self._sync_scheduler_state()
 
     def _run_update(self):
         """执行更新任务"""
@@ -322,8 +356,8 @@ class DataUpdateScheduler:
             logger.warning("调度器已在运行")
             return False
 
-        if not self.enabled:
-            logger.warning("调度器未启用")
+        if not self._has_enabled_schedules():
+            logger.warning("调度器没有可运行的定时任务")
             return False
 
         self.is_running = True
@@ -366,7 +400,7 @@ class DataUpdateScheduler:
     def get_status(self):
         """获取调度器状态"""
         next_run = None
-        if self.enabled and self.is_running:
+        if self.is_running and schedule.jobs:
             next_job = schedule.next_run()
             if next_job:
                 next_run = next_job.strftime('%Y-%m-%d %H:%M:%S')

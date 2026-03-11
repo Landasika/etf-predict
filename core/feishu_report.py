@@ -4,12 +4,12 @@ ETF操作建议报告生成器
 生成飞书消息格式的ETF操作建议
 """
 import sqlite3
-from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
 
 from core.database import get_etf_connection
 from core.watchlist import load_watchlist
+import config
 
 
 class ETFOperationReport:
@@ -31,14 +31,11 @@ class ETFOperationReport:
         try:
             from core.watchlist import calculate_realtime_signal
             from core.database import get_etf_daily_data
-            from datetime import datetime, timedelta
 
             print("✓ 直接调用内部函数获取数据")
 
-            # 计算开始日期（一年前，和API相同）
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=365)
-            start_date_str = start_date.strftime('%Y%m%d')
+            # 使用统一固定回测起点，避免每天滚动窗口导致结果漂移
+            start_date_str = config.DEFAULT_START_DATE
 
             etfs = self.watchlist.get('etfs', [])
             for etf in etfs:

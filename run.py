@@ -12,17 +12,7 @@ from api.main import app
 import config
 
 if __name__ == '__main__':
-    # 启动数据更新调度器
-    try:
-        from core.data_update_scheduler import get_scheduler
-        scheduler = get_scheduler()
-
-        # 设置默认更新时间
-        scheduler.set_update_time("15:05")
-
-        print("📅 数据更新调度器已加载（可通过前端界面启用）")
-    except Exception as e:
-        print(f"⚠️  调度器加载失败: {e}")
+    print("📅 调度器将在应用启动时按 config.json 自动恢复")
 
     print(f"""
 =====================================

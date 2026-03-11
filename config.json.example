@@ -21,11 +21,28 @@
     "login_attempt_window": 300,
     "lockout_duration": 900
   },
+  "tinyshare": {
+    "token": "your-tinyshare-token"
+  },
   "tushare": {
     "token": "your-tushare-token"
   },
   "minishare": {
     "token": "your-minishare-token"
+  },
+  "update_schedule": {
+    "enabled": false,
+    "time": "15:05"
+  },
+  "feishu_notification_schedule": {
+    "enabled": false,
+    "times": [
+      "09:40",
+      "10:40",
+      "11:40",
+      "13:40",
+      "14:40"
+    ]
   },
   "strategies": {
     "macd_aggressive": "MACD激进策略",

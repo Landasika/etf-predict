@@ -17,7 +17,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import tushare as ts
+import tinyshare as ts
 import pandas as pd
 import sqlite3
 import logging
@@ -51,12 +51,11 @@ MARKET_CLOSE_MINUTE = 5
 
 # ==================== 辅助函数 ====================
 
-def get_tushare_token():
-    """获取Tushare Token（从config.json读取）"""
-    # 从config读取
-    if config.TUSHARE_TOKEN:
-        logger.info("✅ 从config读取Tushare Token")
-        return config.TUSHARE_TOKEN
+def get_tinyshare_token():
+    """获取 tinyshare 授权码（优先从 config.json 的 tinyshare.token 读取）"""
+    if config.TINYSHARE_TOKEN:
+        logger.info("✅ 从 config 读取 tinyshare 授权码")
+        return config.TINYSHARE_TOKEN
 
     return None
 
@@ -149,9 +148,9 @@ def download_latest_data(etf_code, target_date):
     Returns:
         DataFrame or None
     """
-    token = get_tushare_token()
+    token = get_tinyshare_token()
     if not token:
-        logger.error("❌ TUSHARE_TOKEN 未配置（请到设置页面配置）")
+        logger.error("❌ tinyshare 授权码未配置（请在 config.json 中设置 tinyshare.token）")
         return None
 
     try:
@@ -281,12 +280,12 @@ def run_auto_update(force=False):
     logger.info("🚀 开始每日自动更新")
     logger.info("=" * 60)
 
-    # 检查Tushare Token
-    token = get_tushare_token()
+    # 检查 tinyshare 授权码
+    token = get_tinyshare_token()
     if not token:
-        logger.error("❌ TUSHARE_TOKEN 未配置")
-        logger.error("   获取Token: https://tushare.pro/register")
-        logger.error("   配置方法: 访问系统设置页面 (http://localhost:8000/settings)")
+        logger.error("❌ tinyshare 授权码未配置")
+        logger.error("   首次使用: pip install tinyshare --upgrade")
+        logger.error("   配置方法: 在 config.json 中设置 tinyshare.token")
         return False
 
     # 获取目标日期

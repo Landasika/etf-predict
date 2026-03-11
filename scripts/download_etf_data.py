@@ -1,12 +1,12 @@
 """
 下载ETF数据脚本
-使用Tushare API下载ETF历史数据
+使用 tinyshare SDK 下载 ETF 历史数据
 """
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import tushare as ts
+import tinyshare as ts
 import pandas as pd
 import sqlite3
 from datetime import datetime, timedelta
@@ -66,18 +66,18 @@ def init_database():
 
 def download_etf_list():
     """下载ETF列表"""
-    print("检查Tushare Token...")
-    if not config.TUSHARE_TOKEN:
-        print("❌ 错误：请先在config.py中设置TUSHARE_TOKEN")
-        print("   获取Token：https://tushare.pro/register")
+    print("检查 tinyshare 授权码...")
+    if not config.TINYSHARE_TOKEN:
+        print("❌ 错误：请先在 config.json 中设置 tinyshare.token")
+        print("   首次使用：pip install tinyshare --upgrade")
         return False
 
-    print(f"使用Token: {config.TUSHARE_TOKEN[:10]}...")
-    ts.set_token(config.TUSHARE_TOKEN)
+    print(f"使用授权码: {config.TINYSHARE_TOKEN[:10]}...")
+    ts.set_token(config.TINYSHARE_TOKEN)
     pro = ts.pro_api()
 
     # 使用代理API
-    pro._DataApi__token = config.TUSHARE_TOKEN
+    pro._DataApi__token = config.TINYSHARE_TOKEN
     pro._DataApi__http_url = 'http://lianghua.nanyangqiankun.top'
     print("使用代理API: http://lianghua.nanyangqiankun.top")
 
@@ -107,15 +107,15 @@ def download_etf_list():
 
 def download_etf_daily(etf_code=None, start_date=None, end_date=None):
     """下载ETF日线数据"""
-    if not config.TUSHARE_TOKEN:
-        print("❌ 请先设置TUSHARE_TOKEN")
+    if not config.TINYSHARE_TOKEN:
+        print("❌ 请先在 config.json 中设置 tinyshare.token")
         return False
 
-    ts.set_token(config.TUSHARE_TOKEN)
+    ts.set_token(config.TINYSHARE_TOKEN)
     pro = ts.pro_api()
 
     # 使用代理API
-    pro._DataApi__token = config.TUSHARE_TOKEN
+    pro._DataApi__token = config.TINYSHARE_TOKEN
     pro._DataApi__http_url = 'http://lianghua.nanyangqiankun.top'
 
     # 确定日期范围

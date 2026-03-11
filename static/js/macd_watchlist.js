@@ -62,17 +62,14 @@ const DEFAULT_MACD_PARAMS = {
     macd_signal: 5
 };
 
+const FIXED_BACKTEST_START_DATE = '20250101';
+
 // API基础URL
 const API_BASE = '/api';
 
-// 获取近一年前的日期（YYYYMMDD格式）
-function getOneYearAgoDate() {
-    const date = new Date();
-    date.setFullYear(date.getFullYear() - 1);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}${month}${day}`;
+// 统一固定回测起点，避免每天滚动窗口导致历史结果漂移
+function getBacktestStartDate() {
+    return FIXED_BACKTEST_START_DATE;
 }
 
 // 初始化
@@ -448,7 +445,7 @@ function updateOptimizeButtonVisibility(strategy) {
  */
 async function loadRealtimeSignal(etfCode, strategy) {
     try {
-        const startDate = getOneYearAgoDate();
+        const startDate = getBacktestStartDate();
         const url = `${API_BASE}/watchlist/${etfCode}/signal?start_date=${startDate}&strategy=${strategy}`;
         const response = await fetch(url);
         const result = await response.json();
@@ -993,7 +990,7 @@ function updateMetrics(metrics) {
  */
 async function loadBacktestData(etfCode, strategy) {
     try {
-        const startDate = getOneYearAgoDate();
+        const startDate = getBacktestStartDate();
         const response = await fetch(`${API_BASE}/macd/backtest/watchlist/${etfCode}?start_date=${startDate}&strategy=${strategy}`);
         const result = await response.json();
 
@@ -1708,7 +1705,7 @@ async function removeEtf(etfCode) {
  */
 async function loadKlineData(etfCode, strategy) {
     try {
-        const startDate = getOneYearAgoDate();
+        const startDate = getBacktestStartDate();
         // 使用新的K线数据API获取OHLCV数据
         const response = await fetch(`${API_BASE}/watchlist/${etfCode}/kline-data?start_date=${startDate}`);
         const result = await response.json();
@@ -3000,4 +2997,3 @@ async function loadAndDisplayRsiTripleLinesParams(etfCode) {
         console.error('Failed to load params:', error);
     }
 }
-

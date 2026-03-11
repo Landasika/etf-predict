@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 from datetime import datetime
 import pandas as pd
 import numpy as np
+import config
 
 from core.database import get_etf_info, get_etf_daily_data
 
@@ -2137,10 +2138,9 @@ def load_batch_signals_optimized(use_realtime: bool = False) -> list:
                 })
         else:
             # 普通模式：完整回测（用于详情页）
-            signal_result = calculate_realtime_signal(etf_code, '20240101', strategy_type)
+            signal_result = calculate_realtime_signal(etf_code, config.DEFAULT_START_DATE, strategy_type)
             if signal_result['success']:
                 results.append(signal_result)
 
     return results
-
 
