@@ -176,12 +176,12 @@ class ETFOperationReport:
         return "\n".join(lines)
 
     def _calculate_stats(self) -> Dict:
-        """计算统计数据"""
+        """计算统计数据（使用API相同的逻辑）"""
         etfs = self.watchlist.get('etfs', [])
 
-        total_positions = 0
-        total_capital = 0
-        total_return = 0
+        total_positions = 0  # 昨日总仓位
+        total_capital = 0  # 昨日总资金（昨日仓位 × 200元/仓）
+        total_return = 0  # 今日总收益
 
         for etf in etfs:
             code = etf['code']
@@ -189,14 +189,21 @@ class ETFOperationReport:
                 continue
 
             data = self.etf_data[code]
-            total_positions += etf.get('total_positions', 10)
-            total_capital += etf.get('position_value', 2000)
+
+            # 使用API相同的逻辑
+            # 昨日持仓：暂时使用配置的总仓位（实际应该从回测结果获取）
+            previous_positions_used = etf.get('total_positions', 10)
+
+            # 每仓200元
+            investment = previous_positions_used * 200
+
+            total_positions += previous_positions_used
+            total_capital += investment
 
             # 计算当日收益
             pct_chg = data['pct_chg'] or 0
-            position_value = etf.get('position_value', 2000)
-            daily_return = position_value * pct_chg / 100
-            total_return += daily_return
+            daily_profit = investment * (pct_chg / 100)
+            total_return += daily_profit
 
         return {
             'total_positions': total_positions,
