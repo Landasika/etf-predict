@@ -40,17 +40,23 @@ class ETFOperationReport:
 
                 try:
                     # 调用内部信号计算函数
-                    signal_data = calculate_realtime_signal(code, name)
+                    signal_result = calculate_realtime_signal(code)
 
-                    if signal_data:
+                    # 检查返回结果
+                    if signal_result and signal_result.get('success'):
+                        data = signal_result.get('data', {})
+                        latest_data = data.get('latest_data', {})
+
                         self.etf_data[code] = {
-                            'name': signal_data.get('name', name),
-                            'close': signal_data.get('close', 0),
-                            'pct_chg': signal_data.get('pct_chg', 0) or signal_data.get('change_pct', 0),
-                            'previous_positions_used': signal_data.get('previous_positions_used', 0),
-                            'positions_used': signal_data.get('positions_used', 0),
-                            'daily_profit': signal_data.get('daily_profit', 0)
+                            'name': latest_data.get('name', name),
+                            'close': latest_data.get('close', 0),
+                            'pct_chg': latest_data.get('pct_chg', 0),
+                            'previous_positions_used': data.get('positions_used', 0),
+                            'positions_used': data.get('positions_used', 0),
+                            'daily_profit': data.get('profit', 0)
                         }
+                    else:
+                        print(f"⚠️  {code} 信号计算失败: {signal_result.get('message', '未知错误')}")
                 except Exception as e:
                     print(f"⚠️  获取 {code} 数据失败: {e}")
                     continue
@@ -61,6 +67,8 @@ class ETFOperationReport:
 
         except Exception as e:
             print(f"❌ 调用内部函数失败: {e}")
+            import traceback
+            traceback.print_exc()
 
         # 如果内部调用失败，使用数据库数据（fallback）
         # 获取ETF数据
@@ -68,7 +76,6 @@ class ETFOperationReport:
         for etf in etfs:
             code = etf['code']
             name = etf['name']
-            strategy = etf.get('strategy', 'macd_aggressive')
 
             # 获取最新行情数据和ETF基本信息
             conn = get_etf_connection()
