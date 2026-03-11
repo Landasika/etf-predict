@@ -189,15 +189,16 @@ class DataUpdateScheduler:
             from core.watchlist import load_watchlist
             from sqlalchemy import text
 
-            watchlist = load_watchlist()
-            if not watchlist:
+            watchlist_data = load_watchlist()
+            if not watchlist_data or not watchlist_data.get('etfs'):
                 logger.warning("⚠️  自选列表为空，跳过飞书消息发送")
                 self.feishu_notification_status['last_result'] = '跳过（自选列表为空）'
                 return
 
             # 获取数据
             with get_db_session() as session:
-                etf_codes = list(watchlist.keys())
+                etfs = watchlist_data.get('etfs', [])
+                etf_codes = [etf['code'] for etf in etfs[:10]]
 
                 # 构建消息
                 message_lines = ["📊 ETF交易建议\n"]
@@ -206,21 +207,34 @@ class DataUpdateScheduler:
                 for etf_code in etf_codes[:10]:  # 最多显示10个
                     try:
                         # 获取最新信号
-                        query = text("""
-                            SELECT name, close, change_pct
-                            FROM etf_daily
-                            WHERE ts_code = :code
-                            ORDER BY trade_date DESC
-                            LIMIT 1
-                        """)
-                        result = session.execute(query, {"code": etf_code}).fetchone()
+                        import sqlite3
+                        from core.database import get_etf_connection
+                        conn = get_etf_connection()
+                        if conn:
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                SELECT d.close, d.pct_chg, b.extname
+                                FROM etf_daily d
+                                LEFT JOIN etf_basic b ON d.ts_code = b.ts_code
+                                WHERE d.ts_code = ?
+                                ORDER BY d.trade_date DESC
+                                LIMIT 1
+                            """, (etf_code,))
+                            result = cursor.fetchone()
+                            conn.close()
 
-                        if result:
-                            name, close, change_pct = result
-                            change_str = f"+{change_pct:.2f}%" if change_pct >= 0 else f"{change_pct:.2f}%"
-                            emoji = "🟢" if change_pct >= 0 else "🔴"
-                            message_lines.append(f"{emoji} {name} ({etf_code})")
-                            message_lines.append(f"   价格: {close:.3f}  涨跌: {change_str}\n")
+                            if result:
+                                close, pct_chg, name = result
+                                if close is not None:
+                                    # 处理 None 值
+                                    if pct_chg is None:
+                                        change_str = "N/A"
+                                        emoji = "⚪"
+                                    else:
+                                        change_str = f"+{pct_chg:.2f}%" if pct_chg >= 0 else f"{pct_chg:.2f}%"
+                                        emoji = "🟢" if pct_chg >= 0 else "🔴"
+                                    message_lines.append(f"{emoji} {name or etf_code} ({etf_code})")
+                                    message_lines.append(f"   价格: {close:.3f}  涨跌: {change_str}\n")
                     except Exception as e:
                         logger.error(f"获取 {etf_code} 数据失败: {e}")
 
