@@ -75,15 +75,19 @@ class ETFOperationReport:
         sell_list = self._get_sell_list()
         hold_list = self._get_hold_list()
 
+        # 计算统计数据
+        stats = self._calculate_stats()
+        etf_count = len(self.watchlist.get('etfs', []))
+
         # 持仓统计
         lines.append("## 📊 持仓统计\n")
-        lines.append("| 项目 | 数值 |")
-        lines.append("| --- | --- |")
+        lines.append("| 项目 | 数值 | 说明 |")
+        lines.append("| --- | --- | --- |")
 
-        stats = self._calculate_stats()
-        lines.append(f"| 昨日总仓位 | {stats.get('total_positions', 0)}仓 |")
-        lines.append(f"| 昨日总资金 | ¥{stats.get('total_capital', 0):,.0f} |")
-        lines.append(f"| 今日总收益 | ¥{stats.get('total_return', 0):+,.2f} |\n")
+        lines.append(f"| 监控ETF | {etf_count}个 | 自选列表总数 |")
+        lines.append(f"| 昨日总仓位 | {stats.get('total_positions', 0)}仓 | {etf_count}个ETF × 平均仓位 |")
+        lines.append(f"| 昨日总资金 | ¥{stats.get('total_capital', 0):,.0f} | 总持仓价值 |")
+        lines.append(f"| 今日总收益 | ¥{stats.get('total_return', 0):+,.2f} | 当日浮动盈亏 |\n")
 
         # 今日操作建议总结
         lines.append("## 📋 今日操作建议\n")
