@@ -6,6 +6,7 @@ ETF操作建议报告生成器
 import sqlite3
 from typing import Dict, List, Optional
 from pathlib import Path
+from datetime import datetime
 
 from core.database import get_etf_connection
 from core.watchlist import load_watchlist
