@@ -227,13 +227,13 @@ class ETFOperationReport:
 
         if sell_list:
             total_sell_positions = sum(item.get('suggested_positions', 0) for item in sell_list)
-            lines.append(f"| 🔴 卖出 | {len(sell_list)}个 | 共{total_sell_positions}份 |")
+            lines.append(f"| 🔴 卖出 | {len(sell_list)}个 | 共{total_sell_positions}仓 |")
         else:
             lines.append("| 🔴 卖出 | 0个 | 暂无卖出建议 |")
 
         if buy_list:
             total_buy_positions = sum(item.get('suggested_positions', 0) for item in buy_list)
-            lines.append(f"| 🟢 买入 | {len(buy_list)}个 | 共{total_buy_positions}份 |")
+            lines.append(f"| 🟢 买入 | {len(buy_list)}个 | 共{total_buy_positions}仓 |")
         else:
             lines.append("| 🟢 买入 | 0个 | 暂无买入建议 |")
 
@@ -247,45 +247,45 @@ class ETFOperationReport:
         # 建议卖出
         if sell_list:
             lines.append("## 🔴 建议卖出\n")
-            lines.append("| ETF名称 | 操作 | 基金名称 | 代码 | 涨跌 | 价格 | 今日收益 | 仓位 |")
+            lines.append("| ETF名称 | 操作 | 基金名称 | 代码 | 涨跌 | 价格 | 今日收益 | 仓位(昨->今) |")
             lines.append("| --- | --- | --- | --- | --- | --- | --- | --- |")
 
             for item in sell_list[:10]:  # 最多显示10个
                 daily_return = item.get('daily_return', 0)
                 lines.append(
                     f"| {item['name']} | "
-                    f"卖出{item['suggested_positions']}份 | "
+                    f"卖出{item['suggested_positions']}仓 | "
                     f"{item['fund_name']} | "
                     f"`{item['code']}` | "
                     f"{item['change_pct']}% | "
                     f"¥{item['price']:.3f} | "
                     f"¥{daily_return:+,.2f} | "
-                    f"{item.get('current_positions', 0)}/{item.get('total_positions', 10)} |"
+                    f"{item.get('previous_positions', 0)}->{item.get('current_positions', 0)}/{item.get('total_positions', 10)} |"
                 )
             lines.append("")
 
         # 建议买入
         if buy_list:
             lines.append("## 🟢 建议买入\n")
-            lines.append("| ETF名称 | 操作 | 基金名称 | 代码 | 涨跌 | 价格 | 建议仓位 |")
+            lines.append("| ETF名称 | 操作 | 基金名称 | 代码 | 涨跌 | 价格 | 仓位(昨->今) |")
             lines.append("| --- | --- | --- | --- | --- | --- | --- |")
 
             for item in buy_list[:10]:  # 最多显示10个
                 lines.append(
                     f"| {item['name']} | "
-                    f"买入{item['suggested_positions']}份 | "
+                    f"买入{item['suggested_positions']}仓 | "
                     f"{item['fund_name']} | "
                     f"`{item['code']}` | "
                     f"{item['change_pct']}% | "
                     f"¥{item['price']:.3f} | "
-                    f"{item.get('total_positions', 10)}份 |"
+                    f"{item.get('previous_positions', 0)}->{item.get('current_positions', 0)}/{item.get('total_positions', 10)} |"
                 )
             lines.append("")
 
         # 建议持有
         if hold_list:
             lines.append("## 🟡 建议持有\n")
-            lines.append("| ETF名称 | 基金名称 | 代码 | 涨跌 | 价格 | 今日收益 | 仓位 |")
+            lines.append("| ETF名称 | 基金名称 | 代码 | 涨跌 | 价格 | 今日收益 | 仓位(昨->今) |")
             lines.append("| --- | --- | --- | --- | --- | --- | --- |")
 
             for item in hold_list[:5]:  # 最多显示5个
@@ -297,7 +297,7 @@ class ETFOperationReport:
                     f"{item['change_pct']}% | "
                     f"¥{item['price']:.3f} | "
                     f"¥{daily_return:+,.2f} | "
-                    f"{item.get('current_positions', 0)}/{item.get('total_positions', 10)} |"
+                    f"{item.get('previous_positions', 0)}->{item.get('current_positions', 0)}/{item.get('total_positions', 10)} |"
                 )
             lines.append("")
 
@@ -371,6 +371,7 @@ class ETFOperationReport:
                     'price': data['close'],
                     'change_pct': f"{data['pct_chg']:.2f}",
                     'suggested_positions': abs(data.get('today_action_count', 0)),
+                    'previous_positions': data.get('previous_positions_used', 0),
                     'total_positions': data.get('total_positions', etf.get('total_positions', 10)),
                     'current_positions': data.get('positions_used', 0),
                     'action_reason': data.get('action_reason', ''),
@@ -400,6 +401,7 @@ class ETFOperationReport:
                     'change_pct': f"{data['pct_chg']:.2f}",
                     'suggested_positions': abs(data.get('today_action_count', 0)),
                     'daily_return': data.get('daily_profit', 0),
+                    'previous_positions': data.get('previous_positions_used', 0),
                     'total_positions': data.get('total_positions', etf.get('total_positions', 10)),
                     'current_positions': data.get('positions_used', 0),
                     'action_reason': data.get('action_reason', ''),
@@ -428,6 +430,7 @@ class ETFOperationReport:
                     'price': data['close'],
                     'change_pct': f"{data['pct_chg']:.2f}",
                     'daily_return': data.get('daily_profit', 0),
+                    'previous_positions': data.get('previous_positions_used', 0),
                     'total_positions': data.get('total_positions', etf.get('total_positions', 10)),
                     'current_positions': data.get('positions_used', 0),
                     'action_reason': data.get('action_reason', ''),
