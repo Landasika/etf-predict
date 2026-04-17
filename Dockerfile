@@ -63,12 +63,14 @@ COPY pytest.ini .
 COPY ruff.toml .
 
 # 创建必要的目录并设置权限
-RUN mkdir -p data logs optimized_weights && \
-    chmod 777 logs optimized_weights
+RUN mkdir -p data logs optimized_weights /home/appuser && \
+    chmod 777 logs optimized_weights /home/appuser
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    HOME=/root \
+    TUSHARE_HOME=/root/.tushare
 
 # 暴露端口
 EXPOSE 8000
