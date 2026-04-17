@@ -48,6 +48,10 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
+# 设置 Python 包目录权限（允许非特权用户写入）
+RUN chmod -R 755 /usr/local/lib/python3.11/site-packages && \
+    chown -R appuser:appuser /usr/local/lib/python3.11/site-packages
+
 # 复制项目文件
 COPY api/ ./api/
 COPY core/ ./core/
@@ -68,6 +72,11 @@ COPY ruff.toml .
 # 创建必要的目录
 RUN mkdir -p data logs optimized_weights && \
     chown -R appuser:appuser /app
+
+# 设置环境变量
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app \
+    TINYSHARE_HOME=/app/data/.tinyshare
 
 # 切换到非特权用户
 USER appuser
