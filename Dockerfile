@@ -19,8 +19,9 @@ RUN apt-get install -y \
 # 复制依赖文件
 COPY requirements.txt .
 
+# 安装 Python 包到系统目录（所有用户可访问）
 # 使用清华镜像源加速 pip 安装
-RUN pip install --no-cache-dir --user -r requirements.txt \
+RUN pip install --no-cache-dir -r requirements.txt \
     -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 
@@ -43,11 +44,9 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 # 设置工作目录
 WORKDIR /app
 
-# 从 builder 阶段复制 Python 包
-COPY --from=builder /root/.local /root/.local
-
-# 确保 Python 包在 PATH 中
-ENV PATH=/root/.local/bin:$PATH
+# 从 builder 阶段复制 Python 包（系统级安装）
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
 # 复制项目文件
 COPY api/ ./api/
