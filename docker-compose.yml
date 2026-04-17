@@ -35,11 +35,13 @@ services:
       - PYTHONUNBUFFERED=1
       - TZ=Asia/Shanghai
     volumes:
-      # 持久化数据
-      - etf-data:/app/data
-      - etf-logs:/app/logs
-      - etf-weights:/app/optimized_weights
-      - etf-config:/app/config
+      # 挂载本地目录（推荐）
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./optimized_weights:/app/optimized_weights
+      # config.json 使用环境变量，不挂载
+      # 如果需要挂载本地配置，取消下面的注释
+      # - ./config.json:/app/config.json:ro
     networks:
       - etf-network
     logging:
