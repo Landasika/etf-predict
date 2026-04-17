@@ -94,7 +94,7 @@ app.add_middleware(
 
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates", auto_reload=False)
+templates = Jinja2Templates(directory="templates")
 
 # 将templates保存到config中供auth模块使用
 config.templates = templates
