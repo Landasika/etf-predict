@@ -38,19 +38,12 @@ LABEL description="ETF预测系统 - 基于MACD和多因子量化策略"
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
     apt-get update
 
-# 创建非特权用户
-RUN groupadd -r appuser && useradd -r -g appuser appuser
-
 # 设置工作目录
 WORKDIR /app
 
 # 从 builder 阶段复制 Python 包（系统级安装）
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
-
-# 设置 Python 包目录权限（允许非特权用户写入）
-RUN chmod -R 755 /usr/local/lib/python3.11/site-packages && \
-    chown -R appuser:appuser /usr/local/lib/python3.11/site-packages
 
 # 复制项目文件
 COPY api/ ./api/
@@ -70,16 +63,11 @@ COPY pytest.ini .
 COPY ruff.toml .
 
 # 创建必要的目录
-RUN mkdir -p data logs optimized_weights && \
-    chown -R appuser:appuser /app
+RUN mkdir -p data logs optimized_weights
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app \
-    TINYSHARE_HOME=/app/data/.tinyshare
-
-# 切换到非特权用户
-USER appuser
+    PYTHONPATH=/app
 
 # 暴露端口
 EXPOSE 8000
