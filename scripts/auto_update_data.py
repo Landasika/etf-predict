@@ -197,8 +197,8 @@ def download_latest_data(etf_code, target_date):
             start_date = (latest_dt + timedelta(days=1)).strftime('%Y%m%d')
             logger.info(f"{etf_code}: 数据库最新日期 {latest_db_date}，将从 {start_date} 开始下载")
         else:
-            # 数据库没有数据，下载最近30天
-            start_date = (datetime.now() - timedelta(days=30)).strftime('%Y%m%d')
+            # 数据库没有数据，从2024年开始下载
+            start_date = '20240101'
             logger.info(f"{etf_code}: 数据库无数据，将从 {start_date} 开始下载")
 
         # 如果起始日期已经大于目标日期，说明数据已经是最新的

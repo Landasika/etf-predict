@@ -131,7 +131,7 @@ def download_etf_daily(etf_code=None, start_date=None, end_date=None):
     if not end_date:
         end_date = datetime.now().strftime('%Y%m%d')
     if not start_date:
-        start_date = (datetime.now() - timedelta(days=365*3)).strftime('%Y%m%d')
+        start_date = '20240101'  # 从2024年开始
 
     # 获取要下载的ETF列表
     conn = sqlite3.connect(config.DATABASE_PATH)
