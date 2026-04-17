@@ -51,8 +51,35 @@ MARKET_CLOSE_MINUTE = 5
 
 # ==================== 辅助函数 ====================
 
+def get_data_source():
+    """获取数据源配置（优先使用 Tushare，回退到 Tinyshare）
+
+    Returns:
+        dict: {'source': 'tushare'|'tinyshare', 'token': str, 'proxy_url': str|None}
+    """
+    # 优先使用 Tushare
+    if config.TUSHARE_TOKEN:
+        logger.info("✅ 使用 Tushare 数据源")
+        return {
+            'source': 'tushare',
+            'token': config.TUSHARE_TOKEN,
+            'proxy_url': config.TUSHARE_PROXY_URL
+        }
+
+    # 回退到 Tinyshare
+    if config.TINYSHARE_TOKEN:
+        logger.info("✅ 使用 Tinyshare 数据源")
+        return {
+            'source': 'tinyshare',
+            'token': config.TINYSHARE_TOKEN,
+            'proxy_url': None
+        }
+
+    return None
+
+
 def get_tinyshare_token():
-    """获取 tinyshare 授权码（优先从 config.json 的 tinyshare.token 读取）"""
+    """获取 tinyshare 授权码（已废弃，保留向后兼容）"""
     if config.TINYSHARE_TOKEN:
         logger.info("✅ 从 config 读取 tinyshare 授权码")
         return config.TINYSHARE_TOKEN
@@ -148,10 +175,17 @@ def download_latest_data(etf_code, target_date):
     Returns:
         DataFrame or None
     """
-    token = get_tinyshare_token()
-    if not token:
-        logger.error("❌ tinyshare 授权码未配置（请在 config.json 中设置 tinyshare.token）")
+    # 获取数据源配置（优先使用 Tushare）
+    data_source = get_data_source()
+    if not data_source:
+        logger.error("❌ 未配置任何数据源（请在 config.json 中设置 tushare.token 或 tinyshare.token）")
         return None
+
+    source = data_source['source']
+    token = data_source['token']
+    proxy_url = data_source.get('proxy_url')
+
+    logger.info(f"{etf_code}: 使用数据源: {source}")
 
     try:
         # 获取数据库中最新的日期
@@ -172,16 +206,37 @@ def download_latest_data(etf_code, target_date):
             logger.info(f"{etf_code}: ✅ 数据已是最新（数据库最新日期 {latest_db_date}）")
             return None
 
-        # 下载数据
-        ts.set_token(token)
-        pro = ts.pro_api()
+        # 根据数据源类型选择不同的 API
+        if source == 'tushare':
+            import tushare as ts
+            ts.set_token(token)
+            pro = ts.pro_api(token)
 
-        # 使用代理API
-        pro._DataApi__token = token
-        pro._DataApi__http_url = 'http://lianghua.nanyangqiankun.top'
+            # 设置代理 URL（如果配置了）
+            if proxy_url:
+                pro._DataApi__http_url = proxy_url
+                logger.info(f"✓ 使用代理服务器: {proxy_url}")
 
-        logger.info(f"{etf_code}: 正在下载 {start_date} ~ {target_date} 的数据...")
-        df = pro.fund_daily(ts_code=etf_code, start_date=start_date, end_date=target_date)
+            logger.info(f"{etf_code}: 正在下载 {start_date} ~ {target_date} 的数据...")
+            df = pro.fund_daily(ts_code=etf_code, start_date=start_date, end_date=target_date)
+
+        else:  # tinyshare
+            import tinyshare as ts
+            ts.set_token(token)
+            pro = ts.pro_api()
+            pro._DataApi__token = token
+
+            # 设置代理 URL（如果配置了）
+            if config.TUSHARE_PROXY_URL:
+                pro._DataApi__http_url = config.TUSHARE_PROXY_URL
+                logger.info(f"✓ 使用代理服务器: {config.TUSHARE_PROXY_URL}")
+            else:
+                # 默认代理（保持向后兼容）
+                pro._DataApi__http_url = 'http://lianghua.nanyangqiankun.top'
+                logger.info("⚠️  使用默认代理（建议在 config.json 中配置 tushare.proxy_url）")
+
+            logger.info(f"{etf_code}: 正在下载 {start_date} ~ {target_date} 的数据...")
+            df = pro.fund_daily(ts_code=etf_code, start_date=start_date, end_date=target_date)
 
         if df.empty:
             logger.warning(f"{etf_code}: ⚠️  无新数据")
@@ -280,13 +335,16 @@ def run_auto_update(force=False):
     logger.info("🚀 开始每日自动更新")
     logger.info("=" * 60)
 
-    # 检查 tinyshare 授权码
-    token = get_tinyshare_token()
-    if not token:
-        logger.error("❌ tinyshare 授权码未配置")
-        logger.error("   首次使用: pip install tinyshare --upgrade")
-        logger.error("   配置方法: 在 config.json 中设置 tinyshare.token")
+    # 检查数据源配置（优先 Tushare，回退到 Tinyshare）
+    data_source = get_data_source()
+    if not data_source:
+        logger.error("❌ 未配置任何数据源")
+        logger.error("   请在 config.json 中配置以下任一选项：")
+        logger.error("   - tushare.token (推荐)")
+        logger.error("   - tinyshare.token")
         return False
+
+    logger.info(f"✅ 使用数据源: {data_source['source']}")
 
     # 获取目标日期
     target_date = get_latest_trade_date()

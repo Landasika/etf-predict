@@ -1,0 +1,61 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# 虚拟环境
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Claude Code
+.claude/
+
+# 文档（保留 CLAUDE.md）
+CHANGELOG.md
+CRITICAL_FIXES_COMPLETE.md
+PROXY_FIX_COMPLETE.md
+TUSHARE_CONFIG_SUMMARY.md
+TUSHARE_PROXY_FIX_COMPLETE.md
+*.md
+!CLAUDE.md
+
+# 临时文件
+*.log
+*.tmp
+.DS_Store
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 数据文件（运行时生成）
+data/*.db
+data/*.sqlite
+logs/*.log
+optimized_weights/
+
+# 配置文件（使用环境变量）
+config.json
+.env
+conf.json
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore

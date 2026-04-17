@@ -94,7 +94,7 @@ app.add_middleware(
 
 # 挂载静态文件
 app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="templates", auto_reload=False)
 
 # 将templates保存到config中供auth模块使用
 config.templates = templates
@@ -176,6 +176,16 @@ def _get_macd_params_display(etf: dict) -> dict:
             'signal': 5,
             'is_optimized': False
         }
+
+
+@app.get("/health")
+async def health_check():
+    """健康检查端点 - 用于 Docker 容器健康检查"""
+    return {
+        "status": "healthy",
+        "service": config.API_TITLE,
+        "version": config.API_VERSION
+    }
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -1812,6 +1822,7 @@ async def test_token(request: Request):
         data = await request.json()
         source = data.get('source')
         token = data.get('token', '').strip()
+        proxy_url = data.get('proxy_url', '').strip()  # 获取代理 URL
 
         if not source or not token:
             raise HTTPException(status_code=400, detail='缺少必要参数')
@@ -1820,9 +1831,11 @@ async def test_token(request: Request):
             # 测试Tushare Token
             try:
                 import tushare as ts
-                ts.set_token(token)
-                pro = ts.pro_api()
+                pro = ts.pro_api(token)
 
+                # ⭐ 设置代理 URL（如果提供）
+                if proxy_url:
+                    pro._DataApi__http_url = proxy_url
                 # 尝试获取一条数据验证连接
                 df = pro.trade_cal(exchange='SSE', start_date='20240101', end_date='20240101')
 
@@ -2098,8 +2111,9 @@ async def update_system_config(request: Request):
 
             # 重新加载token
             if 'tushare' in data:
-                global TUSHARE_TOKEN
+                global TUSHARE_TOKEN, TUSHARE_PROXY_URL
                 TUSHARE_TOKEN = data['tushare']['token']
+                TUSHARE_PROXY_URL = data['tushare'].get('proxy_url', '')
 
             if 'minishare' in data:
                 global MINISHARE_TOKEN

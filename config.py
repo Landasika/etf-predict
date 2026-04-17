@@ -1,6 +1,7 @@
 """
 ETF预测系统配置
-从 config.json 文件读取所有配置
+支持从环境变量和 config.json 文件读取配置
+环境变量优先级高于配置文件
 """
 import os
 import json
@@ -11,6 +12,22 @@ from pathlib import Path
 # 项目路径
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, 'config.json')
+
+
+def _get_env(key, default=None):
+    """获取环境变量，支持 None 值"""
+    value = os.environ.get(key, default)
+    if value == 'None':
+        return None
+    return value
+
+
+def _get_env_bool(key, default=False):
+    """获取布尔型环境变量"""
+    value = os.environ.get(key, '')
+    if not value:
+        return default
+    return value.lower() in ('true', '1', 'yes', 'on')
 
 DEFAULT_UPDATE_TIME = "15:05"
 DEFAULT_FEISHU_NOTIFICATION_TIMES = ["09:40", "10:40", "11:40", "13:40", "14:40"]
@@ -67,7 +84,7 @@ def _merge_defaults(user_config, default_config):
 
 
 def load_config():
-    """从 config.json 加载配置"""
+    """从 config.json 加载配置，并应用环境变量覆盖"""
     config_path = Path(CONFIG_FILE)
 
     if not config_path.exists():
@@ -75,13 +92,54 @@ def load_config():
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(DEFAULT_CONFIG, f, ensure_ascii=False, indent=2)
 
-        return deepcopy(DEFAULT_CONFIG)
+        config = deepcopy(DEFAULT_CONFIG)
+    else:
+        # 读取配置
+        with open(config_path, 'r', encoding='utf-8') as f:
+            user_config = json.load(f)
+        config = _merge_defaults(user_config, DEFAULT_CONFIG)
 
-    # 读取配置
-    with open(config_path, 'r', encoding='utf-8') as f:
-        user_config = json.load(f)
+    # 应用环境变量覆盖
+    return _apply_env_overrides(config)
 
-    return _merge_defaults(user_config, DEFAULT_CONFIG)
+
+def _apply_env_overrides(config):
+    """应用环境变量覆盖配置文件"""
+    # API 配置
+    if _get_env('API_HOST'):
+        config['api']['host'] = _get_env('API_HOST')
+    if _get_env('API_PORT'):
+        config['api']['port'] = int(_get_env('API_PORT'))
+
+    # 认证配置
+    if _get_env('AUTH_KEY'):
+        config['auth']['auth_key'] = _get_env('AUTH_KEY')
+    if _get_env('SESSION_SECRET_KEY'):
+        config['auth']['session_secret_key'] = _get_env('SESSION_SECRET_KEY')
+
+    # 数据源配置
+    if _get_env('TUSHARE_TOKEN'):
+        config.setdefault('tushare', {})['token'] = _get_env('TUSHARE_TOKEN')
+    if _get_env('TUSHARE_PROXY_URL'):
+        config.setdefault('tushare', {})['proxy_url'] = _get_env('TUSHARE_PROXY_URL')
+    if _get_env('TINYSHARE_TOKEN'):
+        config.setdefault('tinyshare', {})['token'] = _get_env('TINYSHARE_TOKEN')
+    if _get_env('MINISHARE_TOKEN'):
+        config.setdefault('minishare', {})['token'] = _get_env('MINISHARE_TOKEN')
+
+    # 调度配置
+    if _get_env('UPDATE_SCHEDULE_ENABLED') is not None:
+        config['update_schedule']['enabled'] = _get_env_bool('UPDATE_SCHEDULE_ENABLED')
+    if _get_env('UPDATE_SCHEDULE_TIME'):
+        config['update_schedule']['time'] = _get_env('UPDATE_SCHEDULE_TIME')
+
+    # 飞书通知配置
+    if _get_env('FEISHU_SCHEDULE_ENABLED') is not None:
+        config['feishu_notification_schedule']['enabled'] = _get_env_bool('FEISHU_SCHEDULE_ENABLED')
+    if _get_env('FEISHU_NOTIFICATION_TIMES'):
+        config['feishu_notification_schedule']['times'] = _get_env('FEISHU_NOTIFICATION_TIMES')
+
+    return config
 
 
 # 加载配置
@@ -117,9 +175,18 @@ def _get_provider_token(config_data, provider_name):
     return provider_config.get('token', '')
 
 
+def _get_provider_proxy_url(config_data, provider_name):
+    """从配置中安全读取数据源代理 URL"""
+    provider_config = config_data.get(provider_name, {})
+    if not isinstance(provider_config, dict):
+        return ""
+    return provider_config.get('proxy_url', '')
+
+
 # ==================== Token配置 ====================
 TINYSHARE_TOKEN = _get_provider_token(_config, 'tinyshare') or _get_provider_token(_config, 'tushare')
 TUSHARE_TOKEN = _get_provider_token(_config, 'tushare')
+TUSHARE_PROXY_URL = _get_provider_proxy_url(_config, 'tushare')
 MINISHARE_TOKEN = _get_provider_token(_config, 'minishare')
 
 # ==================== 策略配置 ====================
@@ -188,6 +255,7 @@ def reload_config():
 
     TINYSHARE_TOKEN = _get_provider_token(_config, 'tinyshare') or _get_provider_token(_config, 'tushare')
     TUSHARE_TOKEN = _get_provider_token(_config, 'tushare')
+    TUSHARE_PROXY_URL = _get_provider_proxy_url(_config, 'tushare')
     MINISHARE_TOKEN = _get_provider_token(_config, 'minishare')
     STRATEGIES = _config['strategies']
 

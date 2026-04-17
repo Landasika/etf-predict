@@ -76,10 +76,15 @@ def download_etf_list():
     ts.set_token(config.TINYSHARE_TOKEN)
     pro = ts.pro_api()
 
-    # 使用代理API
+    # 使用代理API（从配置文件读取）
     pro._DataApi__token = config.TINYSHARE_TOKEN
-    pro._DataApi__http_url = 'http://lianghua.nanyangqiankun.top'
-    print("使用代理API: http://lianghua.nanyangqiankun.top")
+    if config.TUSHARE_PROXY_URL:
+        pro._DataApi__http_url = config.TUSHARE_PROXY_URL
+        print(f"使用代理API: {config.TUSHARE_PROXY_URL}")
+    else:
+        # 默认代理（保持向后兼容）
+        pro._DataApi__http_url = 'http://lianghua.nanyangqiankun.top'
+        print("使用代理API: http://lianghua.nanyangqiankun.top（默认）")
 
     print("正在下载ETF列表...")
     try:
@@ -114,9 +119,13 @@ def download_etf_daily(etf_code=None, start_date=None, end_date=None):
     ts.set_token(config.TINYSHARE_TOKEN)
     pro = ts.pro_api()
 
-    # 使用代理API
+    # 使用代理API（从配置文件读取）
     pro._DataApi__token = config.TINYSHARE_TOKEN
-    pro._DataApi__http_url = 'http://lianghua.nanyangqiankun.top'
+    if config.TUSHARE_PROXY_URL:
+        pro._DataApi__http_url = config.TUSHARE_PROXY_URL
+    else:
+        # 默认代理（保持向后兼容）
+        pro._DataApi__http_url = 'http://lianghua.nanyangqiankun.top'
 
     # 确定日期范围
     if not end_date:

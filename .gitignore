@@ -31,6 +31,7 @@ data/*.db
 
 # 日志文件
 *.log
+logs/
 
 # 测试覆盖率
 .pytest_cache/

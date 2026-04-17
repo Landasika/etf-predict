@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  etf-predict:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: etf-predict
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      # 数据源配置
+      - TUSHARE_TOKEN=${TUSHARE_TOKEN}
+      - TINYSHARE_TOKEN=${TINYSHARE_TOKEN:-}
+      - MINISHARE_TOKEN=${MINISHARE_TOKEN:-}
+      - TUSHARE_PROXY_URL=${TUSHARE_PROXY_URL:-}
+
+      # API 配置
+      - API_HOST=${API_HOST:-0.0.0.0}
+      - API_PORT=${API_PORT:-8000}
+
+      # 认证配置
+      - AUTH_KEY=${AUTH_KEY:-admin123}
+      - SESSION_SECRET_KEY=${SESSION_SECRET_KEY}
+
+      # 调度配置
+      - UPDATE_SCHEDULE_ENABLED=${UPDATE_SCHEDULE_ENABLED:-true}
+      - UPDATE_SCHEDULE_TIME=${UPDATE_SCHEDULE_TIME:-15:05}
+
+      # 飞书通知配置
+      - FEISHU_SCHEDULE_ENABLED=${FEISHU_SCHEDULE_ENABLED:-false}
+      - FEISHU_WEBHOOK_URL=${FEISHU_WEBHOOK_URL:-}
+      - FEISHU_NOTIFICATION_TIMES=${FEISHU_NOTIFICATION_TIMES:-09:40,10:40,11:40,13:40,14:40}
+
+      # Python 配置
+      - PYTHONUNBUFFERED=1
+      - TZ=Asia/Shanghai
+    volumes:
+      # 持久化数据
+      - etf-data:/app/data
+      - etf-logs:/app/logs
+      - etf-weights:/app/optimized_weights
+      - etf-config:/app/config
+    networks:
+      - etf-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  etf-data:
+    driver: local
+  etf-logs:
+    driver: local
+  etf-weights:
+    driver: local
+  etf-config:
+    driver: local
+
+networks:
+  etf-network:
+    driver: bridge

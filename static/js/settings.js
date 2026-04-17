@@ -64,27 +64,46 @@ async function loadSettings() {
             if (config.tushare) {
                 const tushareInput = document.getElementById('tushareToken');
                 if (tushareInput) {
-                    tushareInput.value = config.tushare.token || '';
-                    tushareInput.placeholder = config.tushare.token ? '已配置' : '输入Tushare Token';
+                    // 如果 token 以 ... 结尾（被截断），不填入输入框
+                    const token = config.tushare.token || '';
+                    if (token && !token.endsWith('...')) {
+                        tushareInput.value = token;
+                    } else {
+                        tushareInput.value = '';  // 清空，让用户输入完整 token
+                    }
+                    tushareInput.placeholder = token ? '已配置（请重新输入完整Token）' : '输入Tushare Token';
 
                     // Show/hide status
                     const statusSpan = tushareInput.parentElement?.querySelector('.setting-status');
                     if (statusSpan) {
-                        statusSpan.textContent = config.tushare.token ? '✓ 已配置' : '';
+                        statusSpan.textContent = token ? '✓ 已配置' : '';
                     }
+                }
+
+                // Load proxy URL
+                const tushareProxyInput = document.getElementById('tushareProxyUrl');
+                if (tushareProxyInput) {
+                    tushareProxyInput.value = config.tushare.proxy_url || '';
+                    tushareProxyInput.placeholder = config.tushare.proxy_url ? '已配置' : 'http://124.222.60.121:8020/';
                 }
             }
 
             if (config.minishare) {
                 const minishareInput = document.getElementById('minishareToken');
                 if (minishareInput) {
-                    minishareInput.value = config.minishare.token || '';
-                    minishareInput.placeholder = config.minishare.token ? '已配置' : '输入Minishare Token';
+                    // 如果 token 以 ... 结尾（被截断），不填入输入框
+                    const token = config.minishare.token || '';
+                    if (token && !token.endsWith('...')) {
+                        minishareInput.value = token;
+                    } else {
+                        minishareInput.value = '';  // 清空，让用户输入完整 token
+                    }
+                    minishareInput.placeholder = token ? '已配置（请重新输入完整Token）' : '输入Minishare Token';
 
                     // Show/hide status
                     const statusSpan = minishareInput.parentElement?.querySelector('.setting-status');
                     if (statusSpan) {
-                        statusSpan.textContent = config.minishare.token ? '✓ 已配置' : '';
+                        statusSpan.textContent = token ? '✓ 已配置' : '';
                     }
                 }
             }
@@ -199,7 +218,8 @@ async function saveSettings() {
         // Collect all settings to update
         const updates = {
             tushare: {
-                token: document.getElementById('tushareToken')?.value || currentConfig.tushare?.token || ''
+                token: document.getElementById('tushareToken')?.value || currentConfig.tushare?.token || '',
+                proxy_url: document.getElementById('tushareProxyUrl')?.value?.trim() || currentConfig.tushare?.proxy_url || ''
             },
             minishare: {
                 token: document.getElementById('minishareToken')?.value || currentConfig.minishare?.token || ''
@@ -341,16 +361,28 @@ async function testToken(source) {
 
         showToast('正在测试连接...');
 
+        // 构建请求数据
+        const requestData = {
+            source: source,
+            token: token
+        };
+
+        // 如果是 Tushare，添加代理 URL
+        if (source === 'tushare') {
+            const proxyInput = document.getElementById('tushareProxyUrl');
+            const proxyUrl = proxyInput?.value?.trim();
+            if (proxyUrl) {
+                requestData.proxy_url = proxyUrl;
+            }
+        }
+
         // Send test request using fetchAPI
         const data = await fetchAPI('/api/settings/test-token', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                source: source,
-                token: token
-            })
+            body: JSON.stringify(requestData)
         });
 
         if (data.success) {
