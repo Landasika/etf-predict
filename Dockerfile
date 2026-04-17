@@ -62,8 +62,9 @@ COPY mypy.ini .
 COPY pytest.ini .
 COPY ruff.toml .
 
-# 创建必要的目录
-RUN mkdir -p data logs optimized_weights
+# 创建必要的目录并设置权限
+RUN mkdir -p data logs optimized_weights && \
+    chmod 777 logs optimized_weights
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1 \
