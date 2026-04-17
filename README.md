@@ -4,7 +4,22 @@
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com)
+[![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+## 🐳 快速部署（Docker）
+
+```bash
+git clone https://github.com/Landasika/etf-predict.git
+cd etf-predict
+cp .env.docker.example .env
+nano .env  # 填写 TUSHARE_TOKEN
+make build && make up
+```
+
+访问 http://localhost:8000 查看系统
+
+[📖 详细部署文档](DOCKER.md) | [🔧 配置说明](#-配置说明)
 
 ## ✨ 功能特性
 
@@ -28,17 +43,73 @@
 
 ## 📦 安装部署
 
-### 1. 环境要求
+### 方式一：Docker 部署（推荐）
+
+**适合生产环境，一键部署，无需手动配置依赖**
+
+#### 快速开始
+
+```bash
+# 1. 克隆项目
+git clone https://github.com/Landasika/etf-predict.git
+cd etf-predict
+
+# 2. 配置环境变量
+cp .env.docker.example .env
+nano .env  # 填写 TUSHARE_TOKEN
+
+# 3. 启动服务
+./docker-start.sh
+
+# 或使用 Makefile
+make build && make up
+```
+
+#### 访问服务
+
+- **API 地址**: http://localhost:8000
+- **API 文档**: http://localhost:8000/docs
+- **健康检查**: http://localhost:8000/health
+
+#### 常用命令
+
+```bash
+make ps          # 查看状态
+make logs        # 查看日志
+make restart     # 重启服务
+make exec        # 进入容器
+make init-db     # 初始化数据库
+make download    # 下载数据
+make clean       # 清理容器
+```
+
+#### 环境变量
+
+| 变量名 | 必需 | 默认值 | 说明 |
+|--------|------|--------|------|
+| `TUSHARE_TOKEN` | ✅ | - | Tushare API Token |
+| `API_PORT` | ❌ | 8000 | API 端口 |
+| `AUTH_KEY` | ❌ | admin123 | 认证密钥 |
+
+详细文档：[DOCKER.md](DOCKER.md)
+
+---
+
+### 方式二：本地安装
+
+**适合开发环境，需要手动配置 Python 环境**
+
+#### 1. 环境要求
 
 - Python 3.8+
 - SQLite 3
 - 1GB+ 可用内存
 
-### 2. 快速开始
+#### 2. 快速开始
 
 ```bash
 # 克隆项目
-git clone <repository-url>
+git clone https://github.com/Landasika/etf-predict.git
 cd etf-predict
 
 # 安装依赖
@@ -51,7 +122,7 @@ python init_db.py
 python run.py
 ```
 
-访问 http://127.0.0.1:8001 查看系统
+访问 http://127.0.0.1:8000 查看系统
 
 ### 3. 数据准备
 
@@ -60,13 +131,27 @@ python run.py
 如果您已有 ETF 数据库，直接复制到 `data/` 目录：
 
 ```bash
+# Docker 部署
+docker cp /path/to/etf.db etf-predict:/app/data/
+
+# 本地部署
 cp /path/to/etf.db data/
 ```
 
 #### 选项 2：从 Tushare 下载
 
+**Docker 部署：**
+
+```bash
+# 1. 在 .env 中配置 TUSHARE_TOKEN
+# 2. 下载数据
+make download
+```
+
+**本地部署：**
+
 1. 注册 Tushare 账号：https://tushare.pro
-2. 编辑 `config.py`，设置 `TUSHARE_TOKEN`
+2. 配置环境变量或编辑 `config.json`
 3. 运行下载脚本：
 
 ```bash
@@ -77,7 +162,7 @@ python scripts/download_etf_data.py
 
 ### 添加 ETF 到自选
 
-1. 访问主页：http://127.0.0.1:8001
+1. 访问主页：http://127.0.0.1:8000（或 http://localhost:8000）
 2. 点击"添加 ETF"按钮
 3. 输入 ETF 代码（如 `510330.SH`）
 4. 选择策略类型
@@ -164,6 +249,7 @@ etf-predict/
 │   └── watchlist_etfs.json # 自选列表
 ├── scripts/              # 实用脚本
 │   ├── download_etf_data.py
+│   ├── verify_docker_config.py
 │   └── check_data.py
 ├── docs/                 # 文档
 │   ├── api.md           # API 文档
@@ -171,7 +257,13 @@ etf-predict/
 │   ├── MACD_AGGRESSIVE_GUIDE.md      # MACD激进策略详解
 │   ├── MACD_KDJ_DISCRETE_GUIDE.md    # MACD+KDJ离散仓位系统详解 ⭐
 │   └── KDJ_DISCRETE_STATE_GUIDE.md   # 状态组合速查表 ⭐
-├── config.py            # 配置文件
+├── Dockerfile            # Docker 镜像构建
+├── docker-compose.yml    # Docker 编排配置
+├── Makefile              # Make 命令简化
+├── .env.docker.example   # 环境变量模板
+├── DOCKER.md             # Docker 部署文档
+├── config.py            # 配置文件（支持环境变量）
+├── config.json          # 配置文件（本地）
 ├── run.py              # 启动脚本
 ├── init_db.py          # 数据库初始化
 ├── requirements.txt    # Python 依赖
@@ -181,41 +273,61 @@ etf-predict/
 
 ## 🔧 配置说明
 
-编辑 `config.py` 可以修改：
+### Docker 部署配置
 
-```python
-# 服务器配置
-API_HOST = '0.0.0.0'
-API_PORT = 8001
+通过环境变量配置（编辑 `.env` 文件）：
 
-# 数据库路径
-DATABASE_PATH = 'data/etf.db'
+```bash
+# 数据源配置
+TUSHARE_TOKEN=your_token_here
+TUSHARE_PROXY_URL=http://124.222.60.121:8020/
 
-# 自选列表路径
-WATCHLIST_PATH = 'data/watchlist_etfs.json'
+# API 配置
+API_HOST=0.0.0.0
+API_PORT=8000
 
-# 优化权重存储路径
-WEIGHTS_PATH = 'optimized_weights'
+# 认证配置
+AUTH_KEY=admin123
+SESSION_SECRET_KEY=your-random-secret-key
 
-# Tushare Token（可选）
-TUSHARE_TOKEN = 'your_token_here'
-
-# 支持的 ETF 列表
-ETF_LIST = [
-    '510330.SH',  # 沪深300ETF
-    '159672.SZ',  # 创业板ETF
-    # ... 更多 ETF
-]
+# 调度配置
+UPDATE_SCHEDULE_ENABLED=true
+UPDATE_SCHEDULE_TIME=15:05
 ```
+
+### 本地部署配置
+
+编辑 `config.json` 或使用环境变量：
+
+```json
+{
+  "database": {"path": "data/etf.db"},
+  "api": {
+    "host": "0.0.0.0",
+    "port": 8000
+  },
+  "tushare": {
+    "token": "your_token_here",
+    "proxy_url": "http://124.222.60.121:8020/"
+  },
+  "auth": {
+    "auth_key": "admin123"
+  }
+}
+```
+
+**注意**：环境变量优先级高于配置文件
 
 ## 🚀 API 文档
 
-启动服务后访问 http://127.0.0.1:8001/docs 查看完整的 API 文档。
+启动服务后访问 http://127.0.0.1:8000/docs 查看完整的 API 文档。
 
 ### 主要端点
 
 | 方法 | 端点 | 说明 |
 |------|------|------|
+| GET | `/` | 主页 |
+| GET | `/health` | 健康检查 |
 | GET | `/api/watchlist` | 获取自选列表 |
 | POST | `/api/watchlist/add` | 添加 ETF |
 | DELETE | `/api/watchlist/{code}` | 删除 ETF |
@@ -243,13 +355,26 @@ ETF_LIST = [
 
 ## ❓ 常见问题
 
+### Q: Docker 部署如何查看日志？
+
+A: 使用 `make logs` 或 `docker-compose logs -f etf-predict`
+
+### Q: Docker 容器无法启动？
+
+A:
+1. 检查 .env 文件是否配置正确
+2. 确保端口 8000 未被占用
+3. 查看日志：`docker-compose logs etf-predict`
+
 ### Q: 为什么页面加载很慢？
 
 A: 首次访问需要计算所有 ETF 的策略信号，请耐心等待。后续访问会使用缓存，速度很快。
 
 ### Q: 如何更新 ETF 数据？
 
-A: 点击页面上的"更新数据"按钮（需要配置 TUSHARE_TOKEN）。
+**Docker 部署：** `make download`
+
+**本地部署：** 点击页面上的"更新数据"按钮（需要配置 TUSHARE_TOKEN）
 
 ### Q: 权重优化失败怎么办？
 
@@ -259,7 +384,29 @@ A: 确保有足够的历史数据（至少 100 个交易日），检查 `optimiz
 
 A: 点击"添加 ETF"按钮，输入 ETF 代码（如 `510330.SH`）即可。
 
+### Q: 如何备份数据？
+
+**Docker 部署：**
+```bash
+# 备份数据卷
+docker run --rm -v etf-predict_etf-data:/data -v $(pwd):/backup \
+  alpine tar czf /backup/etf-data-backup.tar.gz /data
+```
+
+**本地部署：** 直接复制 `data/etf.db` 文件
+
 ## 📝 更新日志
+
+### v1.2.0 (2026-04-17)
+- 🐳 **新增 Docker 生产部署支持**
+  - 多阶段构建镜像，非特权用户运行
+  - docker-compose 编排配置
+  - 环境变量管理敏感信息
+  - 健康检查和日志轮转
+- ✨ 支持 Tushare 代理配置
+- ✨ 配置文件支持环境变量覆盖
+- 🔧 添加 Makefile 和快速启动脚本
+- 📝 完善部署文档和配置验证工具
 
 ### v1.1.0 (2026-02-17)
 - ✨ 新增用户自定义备注功能
