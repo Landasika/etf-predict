@@ -6,8 +6,12 @@ FROM python:3.11-slim AS builder
 # 设置工作目录
 WORKDIR /build
 
+# 更换为阿里云镜像源（加速国内构建）
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update
+
 # 安装编译依赖
-RUN apt-get update && apt-get install -y \
+RUN apt-get install -y \
     gcc \
     g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -15,8 +19,9 @@ RUN apt-get update && apt-get install -y \
 # 复制依赖文件
 COPY requirements.txt .
 
-# 安装 Python 包到临时目录
-RUN pip install --no-cache-dir --user -r requirements.txt
+# 使用清华镜像源加速 pip 安装
+RUN pip install --no-cache-dir --user -r requirements.txt \
+    -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 
 # ==========================================
@@ -27,6 +32,10 @@ FROM python:3.11-slim
 # 设置标签
 LABEL maintainer="landasika"
 LABEL description="ETF预测系统 - 基于MACD和多因子量化策略"
+
+# 更换为阿里云镜像源（加速国内构建）
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    apt-get update
 
 # 创建非特权用户
 RUN groupadd -r appuser && useradd -r -g appuser appuser
