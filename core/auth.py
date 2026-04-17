@@ -166,9 +166,9 @@ async def login_page(request: Request):
     error_msg = request.session.pop("login_error", None)
 
     return config.templates.TemplateResponse(
+        request,
         "login.html",
         {
-            "request": request,
             "error": error_msg
         }
     )

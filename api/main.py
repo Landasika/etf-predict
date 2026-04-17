@@ -191,19 +191,19 @@ async def health_check():
 @app.get("/", response_class=HTMLResponse)
 async def index_page(request: Request):
     """Home page - 批量展示策略、持仓、下个交易日操作"""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.get("/macd-watchlist", response_class=HTMLResponse)
 async def macd_watchlist_page(request: Request):
     """MACD Strategy watchlist page with split-view layout."""
-    return templates.TemplateResponse("macd_watchlist.html", {"request": request})
+    return templates.TemplateResponse(request, "macd_watchlist.html")
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request):
     """System settings page."""
-    return templates.TemplateResponse("settings.html", {"request": request})
+    return templates.TemplateResponse(request, "settings.html")
 
 
 @app.get("/profit", response_class=HTMLResponse)
@@ -212,7 +212,7 @@ async def profit_page(request: Request):
     auth_check = await require_auth(request)
     if auth_check:
         return auth_check
-    return templates.TemplateResponse("profit.html", {"request": request})
+    return templates.TemplateResponse(request, "profit.html")
 
 
 # ==================== 批量数据端点 ====================
