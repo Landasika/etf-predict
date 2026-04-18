@@ -31,6 +31,12 @@ services:
       - FEISHU_WEBHOOK_URL=${FEISHU_WEBHOOK_URL:-}
       - FEISHU_NOTIFICATION_TIMES=${FEISHU_NOTIFICATION_TIMES:-09:40,10:40,11:40,13:40,14:40}
 
+      # 飞书机器人配置（兼容代码中的 BOT_1_ 前缀）
+      - BOT_1_NAME=${BOT_1_NAME:-default}
+      - BOT_1_APP_ID=${BOT_1_APP_ID}
+      - BOT_1_APP_SECRET=${BOT_1_APP_SECRET}
+      - BOT_1_CHAT_ID=${BOT_1_CHAT_ID}
+
       # Python 配置
       - PYTHONUNBUFFERED=1
       - TZ=Asia/Shanghai
