@@ -58,6 +58,7 @@ COPY run.py .
 COPY init_db.py .
 COPY scheduler.py .
 COPY config.py .
+COPY feishu_bot.py .
 COPY mypy.ini .
 COPY pytest.ini .
 COPY ruff.toml .
