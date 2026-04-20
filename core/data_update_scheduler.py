@@ -89,6 +89,7 @@ class DataUpdateScheduler:
 
         update_schedule = config_data.get('update_schedule', {})
         feishu_schedule = config_data.get('feishu_notification_schedule', {})
+        realtime_schedule = config_data.get('realtime_updater_schedule', {})
 
         update_time = update_schedule.get('time', config.DEFAULT_UPDATE_TIME)
         if not self.set_update_time(update_time):
@@ -111,10 +112,20 @@ class DataUpdateScheduler:
         self.set_enabled(bool(update_schedule.get('enabled', False)))
         self.set_feishu_notification_enabled(bool(feishu_schedule.get('enabled', False)))
 
+        # 实时更新器配置
+        realtime_enabled = bool(realtime_schedule.get('enabled', False))
+        if realtime_enabled:
+            start_time = realtime_schedule.get('start_time', '09:25')
+            end_time = realtime_schedule.get('end_time', '15:05')
+            update_interval = realtime_schedule.get('update_interval', 60)
+            self.set_realtime_settings(start_time, end_time, update_interval)
+            self.set_realtime_enabled(True)
+
         logger.info(
-            "✅ 调度器配置已恢复: 数据更新=%s, 飞书定时=%s",
+            "✅ 调度器配置已恢复: 数据更新=%s, 飞书定时=%s, 实时更新=%s",
             self.enabled,
-            self.feishu_notification_enabled
+            self.feishu_notification_enabled,
+            self.realtime_enabled
         )
 
     def set_realtime_enabled(self, enabled: bool):

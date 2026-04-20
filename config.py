@@ -32,6 +32,9 @@ def _get_env_bool(key, default=False):
 DEFAULT_UPDATE_TIME = "15:05"
 DEFAULT_FEISHU_NOTIFICATION_TIMES = ["09:40", "10:40", "11:40", "13:40", "14:40"]
 DEFAULT_FEISHU_NOTIFICATION_TIMES_TEXT = ",".join(DEFAULT_FEISHU_NOTIFICATION_TIMES)
+DEFAULT_REALTIME_UPDATER_START_TIME = "09:25"
+DEFAULT_REALTIME_UPDATER_END_TIME = "15:05"
+DEFAULT_REALTIME_UPDATER_INTERVAL = 60
 DEFAULT_CONFIG = {
     "database": {"path": "data/etf.db"},
     "watchlist": {"path": "data/watchlist_etfs.json"},
@@ -61,6 +64,12 @@ DEFAULT_CONFIG = {
     "feishu_notification_schedule": {
         "enabled": False,
         "times": DEFAULT_FEISHU_NOTIFICATION_TIMES_TEXT
+    },
+    "realtime_updater_schedule": {
+        "enabled": False,
+        "start_time": DEFAULT_REALTIME_UPDATER_START_TIME,
+        "end_time": DEFAULT_REALTIME_UPDATER_END_TIME,
+        "update_interval": DEFAULT_REALTIME_UPDATER_INTERVAL
     },
     "strategies": {
         "macd_aggressive": "MACD激进策略",
@@ -138,6 +147,16 @@ def _apply_env_overrides(config):
         config['feishu_notification_schedule']['enabled'] = _get_env_bool('FEISHU_SCHEDULE_ENABLED')
     if _get_env('FEISHU_NOTIFICATION_TIMES'):
         config['feishu_notification_schedule']['times'] = _get_env('FEISHU_NOTIFICATION_TIMES')
+
+    # 实时数据更新器配置
+    if _get_env('REALTIME_UPDATER_ENABLED') is not None:
+        config.setdefault('realtime_updater_schedule', {})['enabled'] = _get_env_bool('REALTIME_UPDATER_ENABLED')
+    if _get_env('REALTIME_UPDATER_START_TIME'):
+        config.setdefault('realtime_updater_schedule', {})['start_time'] = _get_env('REALTIME_UPDATER_START_TIME')
+    if _get_env('REALTIME_UPDATER_END_TIME'):
+        config.setdefault('realtime_updater_schedule', {})['end_time'] = _get_env('REALTIME_UPDATER_END_TIME')
+    if _get_env('REALTIME_UPDATER_INTERVAL'):
+        config.setdefault('realtime_updater_schedule', {})['update_interval'] = int(_get_env('REALTIME_UPDATER_INTERVAL'))
 
     return config
 
@@ -295,6 +314,11 @@ def update_config(updates):
 DEFAULT_INITIAL_CAPITAL = 2000
 DEFAULT_POSITIONS = 10
 DEFAULT_START_DATE = '20250101'
+
+# 实时更新器默认参数
+DEFAULT_REALTIME_UPDATER_START_TIME = "09:25"
+DEFAULT_REALTIME_UPDATER_END_TIME = "15:05"
+DEFAULT_REALTIME_UPDATER_INTERVAL = 60
 
 # 支持的交易所
 EXCHANGES = ['SH', 'SZ']
