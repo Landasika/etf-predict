@@ -404,8 +404,8 @@ class RealtimeDataUpdater:
                     success_count += 1
 
                     # 记录价格变化
-                    close_price = float(latest.get('close', 0))
-                    pct_change = float(latest.get('pct_chg', 0))
+                    close_price = float(latest['close'])
+                    pct_change = float(latest['pct_chg'])
                     logger.info(f"  ✅ {etf_code}: 价格={close_price:.3f}, 涨跌={pct_change:+.2f}%")
 
                 except Exception as e:
