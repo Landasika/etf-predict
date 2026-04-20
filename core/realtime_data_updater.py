@@ -221,7 +221,7 @@ class RealtimeDataUpdater:
     def _is_trading_time(self, dt: datetime) -> bool:
         """判断是否为监控时间（使用自定义时间范围）
 
-        注意：需要排除午休时间 (11:30-13:00)
+        注意：不包括午休时间限制，全天监控
         """
         current_time = dt.time()
         weekday = dt.weekday()
@@ -238,18 +238,12 @@ class RealtimeDataUpdater:
         if not (start <= current_time <= end):
             return False
 
-        # 排除午休时间 (11:30-13:00)
-        lunch_start = datetime.strptime("11:30", "%H:%M").time()
-        lunch_end = datetime.strptime("13:00", "%H:%M").time()
-        if lunch_start <= current_time <= lunch_end:
-            return False
-
         return True
 
     def _calculate_sleep_time(self, now: datetime) -> int:
         """计算距离下次开市的等待时间（秒）
 
-        考虑午休时间：11:30-13:00
+        不考虑午休时间，全天监控
 
         Args:
             now: 当前时间
@@ -264,10 +258,6 @@ class RealtimeDataUpdater:
         # 解析监控时间范围
         start = datetime.strptime(self.start_time, "%H:%M").time()
         end = datetime.strptime(self.end_time, "%H:%M").time()
-
-        # 午休时间
-        lunch_start = datetime.strptime("11:30", "%H:%M").time()
-        lunch_end = datetime.strptime("13:00", "%H:%M").time()
 
         # 周末：休眠到周一早上
         if weekday >= 5:  # 周六、周日
@@ -285,13 +275,6 @@ class RealtimeDataUpdater:
             sleep_seconds = int((next_run - now).total_seconds())
             return max(sleep_seconds, 60)
 
-        # 午休时间：休眠到下午开市
-        if lunch_start <= current_time <= lunch_end:
-            # 下午13:00
-            next_run = datetime.combine(today_date, lunch_end)
-            sleep_seconds = int((next_run - now).total_seconds())
-            return max(sleep_seconds, 60)
-
         # 工作日收市后：已过交易时间
         if current_time > end:
             # 明天早上 start_time
@@ -300,8 +283,8 @@ class RealtimeDataUpdater:
             sleep_seconds = int((next_run - now).total_seconds())
             return max(sleep_seconds, 60)
 
-        # 不应该在非交易时间到达这里，但如果到了，就休眠1分钟
-        return 60
+        # 在交易时间内：休眠到下一次更新
+        return self.update_interval
 
     def _update_all_etfs(self) -> Dict:
         """更新所有自选ETF的实时数据
