@@ -438,14 +438,14 @@ class RealtimeDataUpdater:
         cursor = conn.cursor()
 
         try:
-            # 准备数据并转换单位
-            ts_code = str(data_row.get('ts_code', ''))
+            # 准备数据并转换单位（使用字典式访问Series）
+            ts_code = str(data_row['ts_code'])
 
             # Minishare rt_etf_k_ms 接口：vol是"股"，需要除以100
-            vol_lots = float(data_row.get('vol', 0)) / 100
+            vol_lots = float(data_row['vol']) / 100
 
             # Minishare rt_etf_k_ms 接口：amount是"元"，需要除以1000
-            amount_thousand = float(data_row.get('amount', 0)) / 1000
+            amount_thousand = float(data_row['amount']) / 1000
 
             cursor.execute('''
                 INSERT OR REPLACE INTO etf_daily
@@ -454,10 +454,10 @@ class RealtimeDataUpdater:
             ''', (
                 ts_code,
                 trade_date,
-                float(data_row.get('open', 0)),
-                float(data_row.get('high', 0)),
-                float(data_row.get('low', 0)),
-                float(data_row.get('close', 0)),
+                float(data_row['open']),
+                float(data_row['high']),
+                float(data_row['low']),
+                float(data_row['close']),
                 vol_lots,       # 已转换为"手"
                 amount_thousand  # 已转换为"千元"
             ))
