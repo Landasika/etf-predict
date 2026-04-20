@@ -26,6 +26,7 @@ requests>=2.32.0
 # 数据源（可选）
 tinyshare
 tushare>=1.4.0
+minishare
 
 # 任务调度
 schedule>=1.2.0
