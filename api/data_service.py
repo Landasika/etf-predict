@@ -9,7 +9,7 @@ import config
 from core.database import (
     get_daily_bars_by_exact_date,
     get_latest_daily_bars,
-    get_latest_data_date,
+    get_latest_data_date_strict,
 )
 
 
@@ -147,10 +147,15 @@ async def health_check():
 
 @router.get("/latest-date")
 async def latest_date():
+    try:
+        latest_data_date = get_latest_data_date_strict()
+    except sqlite3.Error:
+        raise HTTPException(status_code=500, detail=DATABASE_UNAVAILABLE_DETAIL)
+
     return {
         "success": True,
         "data": {
-            "latest_date": get_latest_data_date(),
+            "latest_date": latest_data_date,
         },
     }
 

@@ -75,6 +75,12 @@ def test_data_service_latest_date_returns_latest_date_from_helper(monkeypatch):
     monkeypatch.setattr(
         data_service,
         "get_latest_data_date",
+        lambda: "legacy-value",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_data_date_strict",
         lambda: "20240517",
         raising=False,
     )
@@ -99,6 +105,12 @@ def test_data_service_latest_date_returns_null_when_helper_returns_none(monkeypa
     monkeypatch.setattr(
         data_service,
         "get_latest_data_date",
+        lambda: "legacy-value",
+        raising=False,
+    )
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_data_date_strict",
         lambda: None,
         raising=False,
     )
@@ -116,6 +128,37 @@ def test_data_service_latest_date_returns_null_when_helper_returns_none(monkeypa
             "latest_date": None,
         },
     }
+
+
+def test_data_service_latest_date_returns_500_when_strict_helper_raises_sqlite_error(
+    monkeypatch,
+):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_data_date",
+        lambda: "legacy-value",
+        raising=False,
+    )
+
+    def raise_sqlite_error():
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_data_date_strict",
+        raise_sqlite_error,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/latest-date",
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "database unavailable"}
 
 
 def test_data_service_daily_requires_symbol(monkeypatch):

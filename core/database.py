@@ -134,6 +134,28 @@ def get_latest_data_date() -> Optional[str]:
     return result['max_date'] if result and result['max_date'] else None
 
 
+def get_latest_data_date_strict() -> Optional[str]:
+    """获取数据库中最新的交易日期。
+
+    Returns:
+        最新交易日期字符串 (YYYYMMDD格式)，如果没有数据返回None
+
+    Raises:
+        sqlite3.Error: 数据库不可用或查询失败
+    """
+    conn = get_etf_connection()
+    if not conn:
+        raise sqlite3.OperationalError("database unavailable")
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute('SELECT MAX(trade_date) as max_date FROM etf_daily')
+        result = cursor.fetchone()
+        return result['max_date'] if result and result['max_date'] else None
+    finally:
+        conn.close()
+
+
 def get_etf_connection():
     """Get connection to ETF database."""
     if not Path(DATABASE_PATH).exists():
