@@ -70,6 +70,54 @@ def test_data_service_health_rejects_empty_server_api_key(monkeypatch):
     }
 
 
+def test_data_service_latest_date_returns_latest_date_from_helper(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_data_date",
+        lambda: "20240517",
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/latest-date",
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "data": {
+            "latest_date": "20240517",
+        },
+    }
+
+
+def test_data_service_latest_date_returns_null_when_helper_returns_none(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_data_date",
+        lambda: None,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/latest-date",
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "data": {
+            "latest_date": None,
+        },
+    }
+
+
 def test_data_service_daily_requires_symbol(monkeypatch):
     monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
 

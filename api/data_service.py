@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 import config
-from core.database import get_daily_bars_by_exact_date, get_latest_daily_bars
+from core.database import (
+    get_daily_bars_by_exact_date,
+    get_latest_daily_bars,
+    get_latest_data_date,
+)
 
 
 UNAUTHORIZED_RESPONSE = {
@@ -137,6 +141,16 @@ async def health_check():
         "data": {
             "status": "healthy",
             "service": "data-service",
+        },
+    }
+
+
+@router.get("/latest-date")
+async def latest_date():
+    return {
+        "success": True,
+        "data": {
+            "latest_date": get_latest_data_date(),
         },
     }
 
