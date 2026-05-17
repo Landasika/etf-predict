@@ -1,9 +1,10 @@
 import hmac
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 import config
+from core.database import get_latest_daily_bars
 
 
 UNAUTHORIZED_RESPONSE = {
@@ -48,5 +49,45 @@ async def health_check():
         "data": {
             "status": "healthy",
             "service": "data-service",
+        },
+    }
+
+
+@router.get("/daily")
+async def get_daily_data(
+    symbol: str | None = Query(default=None),
+    days: int = Query(default=60),
+):
+    normalized_symbol = symbol.strip() if symbol else ""
+    if not normalized_symbol:
+        raise HTTPException(status_code=400, detail="symbol is required")
+    if days < 1 or days > 1000:
+        raise HTTPException(
+            status_code=400,
+            detail="days must be between 1 and 1000",
+        )
+
+    bars = get_latest_daily_bars(normalized_symbol, days)
+    if bars is None:
+        raise HTTPException(status_code=500, detail="database unavailable")
+
+    response_bars = [
+        {
+            "trade_date": bar["trade_date"],
+            "open": bar["open"],
+            "high": bar["high"],
+            "low": bar["low"],
+            "close": bar["close"],
+            "volume": bar["vol"],
+        }
+        for bar in bars
+    ]
+
+    return {
+        "success": True,
+        "data": {
+            "symbol": normalized_symbol,
+            "count": len(response_bars),
+            "bars": response_bars,
         },
     }

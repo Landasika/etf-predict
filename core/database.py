@@ -239,6 +239,29 @@ def get_etf_kline_data(ts_code: str, start_date: Optional[str] = None,
     return data
 
 
+def get_latest_daily_bars(ts_code: str, limit: int = 60) -> Optional[List[Dict]]:
+    """Get the latest daily bars for a single ETF ordered by trade date descending."""
+    conn = get_etf_connection()
+    if not conn:
+        return None
+
+    cursor = conn.cursor()
+    cursor.execute(
+        '''
+        SELECT trade_date, open, high, low, close, vol
+        FROM etf_daily
+        WHERE ts_code = ?
+        ORDER BY trade_date DESC
+        LIMIT ?
+        ''',
+        (ts_code, limit),
+    )
+    results = cursor.fetchall()
+    conn.close()
+
+    return [dict(row) for row in results]
+
+
 def get_etf_info(ts_code: str) -> Optional[Dict]:
     """Get ETF basic information.
 
