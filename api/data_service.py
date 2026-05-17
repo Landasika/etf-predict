@@ -166,7 +166,9 @@ async def get_daily_batch_data(
 ):
     normalized_symbols = _normalize_daily_symbols(symbols)
     normalized_date = _parse_daily_date(date)
-    normalized_days = _parse_daily_days(days, default_days=5)
+    normalized_days = (
+        5 if normalized_date is not None else _parse_daily_days(days, default_days=5)
+    )
     bars_by_symbol = {}
 
     for symbol in normalized_symbols:

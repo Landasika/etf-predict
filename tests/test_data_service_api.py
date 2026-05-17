@@ -485,6 +485,54 @@ def test_data_service_daily_batch_date_mode_uses_exact_date_and_ignores_days(mon
     ]
 
 
+def test_data_service_daily_batch_date_mode_ignores_invalid_days(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+    exact_date_calls = []
+
+    def fail_if_latest_called(symbol, days):
+        raise AssertionError("latest helper should not be called when date is provided")
+
+    def fake_get_daily_bars_by_exact_date(symbol, trade_date):
+        exact_date_calls.append((symbol, trade_date))
+        return []
+
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_daily_bars",
+        fail_if_latest_called,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        data_service,
+        "get_daily_bars_by_exact_date",
+        fake_get_daily_bars_by_exact_date,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily/batch",
+        params={
+            "symbols": "562360.SH",
+            "date": "20240517",
+            "days": "0",
+        },
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "data": {
+            "count": 1,
+            "bars": {
+                "562360.SH": [],
+            },
+        },
+    }
+    assert exact_date_calls == [("562360.SH", "20240517")]
+
+
 def test_data_service_daily_batch_rejects_invalid_date(monkeypatch):
     monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
 
