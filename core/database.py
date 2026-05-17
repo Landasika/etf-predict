@@ -265,6 +265,31 @@ def get_latest_daily_bars(ts_code: str, limit: int = 60) -> Optional[List[Dict]]
         conn.close()
 
 
+def get_daily_bars_by_exact_date(ts_code: str, trade_date: str) -> Optional[List[Dict]]:
+    """Get daily bars for a single ETF on an exact trade date."""
+    conn = get_etf_connection()
+    if not conn:
+        return None
+
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            SELECT trade_date, open, high, low, close, vol
+            FROM etf_daily
+            WHERE ts_code = ? AND trade_date = ?
+            ORDER BY trade_date DESC
+            ''',
+            (ts_code, trade_date),
+        )
+        results = cursor.fetchall()
+        return [dict(row) for row in results]
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+
+
 def get_etf_info(ts_code: str) -> Optional[Dict]:
     """Get ETF basic information.
 

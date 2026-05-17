@@ -328,3 +328,232 @@ def test_data_service_daily_returns_500_when_helper_raises_sqlite_error(monkeypa
 
     assert response.status_code == 500
     assert response.json() == {"detail": "database unavailable"}
+
+
+def test_data_service_daily_batch_requires_symbols(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily/batch",
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "symbols is required"}
+
+
+def test_data_service_daily_batch_rejects_blank_symbols(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily/batch",
+        params={"symbols": " ,   , "},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "symbols is required"}
+
+
+def test_data_service_daily_batch_returns_latest_bars_for_each_symbol(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+    calls = []
+
+    def fake_get_latest_daily_bars(symbol, days):
+        calls.append((symbol, days))
+        if symbol == "562360.SH":
+            return [
+                {
+                    "trade_date": "20240517",
+                    "open": 1.11,
+                    "high": 1.22,
+                    "low": 1.01,
+                    "close": 1.15,
+                    "vol": 123456,
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_daily_bars",
+        fake_get_latest_daily_bars,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily/batch",
+        params={"symbols": " 562360.SH , 510300.SH ", "days": "2"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "data": {
+            "count": 2,
+            "bars": {
+                "562360.SH": [
+                    {
+                        "trade_date": "20240517",
+                        "open": 1.11,
+                        "high": 1.22,
+                        "low": 1.01,
+                        "close": 1.15,
+                        "volume": 123456,
+                    }
+                ],
+                "510300.SH": [],
+            },
+        },
+    }
+    assert calls == [("562360.SH", 2), ("510300.SH", 2)]
+
+
+def test_data_service_daily_batch_date_mode_uses_exact_date_and_ignores_days(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+    exact_date_calls = []
+
+    def fail_if_latest_called(symbol, days):
+        raise AssertionError("latest helper should not be called when date is provided")
+
+    def fake_get_daily_bars_by_exact_date(symbol, trade_date):
+        exact_date_calls.append((symbol, trade_date))
+        if symbol == "562360.SH":
+            return [
+                {
+                    "trade_date": "20240517",
+                    "open": 2.11,
+                    "high": 2.22,
+                    "low": 2.01,
+                    "close": 2.15,
+                    "vol": 222222,
+                }
+            ]
+        return []
+
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_daily_bars",
+        fail_if_latest_called,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        data_service,
+        "get_daily_bars_by_exact_date",
+        fake_get_daily_bars_by_exact_date,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily/batch",
+        params={
+            "symbols": "562360.SH,510300.SH",
+            "date": "20240517",
+            "days": "99",
+        },
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "data": {
+            "count": 2,
+            "bars": {
+                "562360.SH": [
+                    {
+                        "trade_date": "20240517",
+                        "open": 2.11,
+                        "high": 2.22,
+                        "low": 2.01,
+                        "close": 2.15,
+                        "volume": 222222,
+                    }
+                ],
+                "510300.SH": [],
+            },
+        },
+    }
+    assert exact_date_calls == [
+        ("562360.SH", "20240517"),
+        ("510300.SH", "20240517"),
+    ]
+
+
+def test_data_service_daily_batch_rejects_invalid_date(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily/batch",
+        params={"symbols": "562360.SH", "date": "2024-05-17"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "date must be in YYYYMMDD format"}
+
+
+def test_data_service_daily_batch_rejects_invalid_days(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily/batch",
+        params={"symbols": "562360.SH", "days": "0"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "days must be between 1 and 1000"}
+
+
+def test_data_service_daily_batch_returns_500_when_latest_helper_returns_none(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_daily_bars",
+        lambda symbol, days: None,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily/batch",
+        params={"symbols": "562360.SH"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "database unavailable"}
+
+
+def test_data_service_daily_batch_returns_500_when_exact_date_helper_raises_sqlite_error(
+    monkeypatch,
+):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+
+    def raise_sqlite_error(symbol, trade_date):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(
+        data_service,
+        "get_daily_bars_by_exact_date",
+        raise_sqlite_error,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily/batch",
+        params={"symbols": "562360.SH", "date": "20240517"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "database unavailable"}
