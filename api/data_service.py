@@ -1,4 +1,5 @@
 import hmac
+import sqlite3
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -12,6 +13,7 @@ UNAUTHORIZED_RESPONSE = {
     "message": "无效的 API Key",
     "code": "UNAUTHORIZED",
 }
+DATABASE_UNAVAILABLE_DETAIL = "database unavailable"
 
 
 class DataServiceAuthError(Exception):
@@ -36,6 +38,45 @@ async def data_service_auth_exception_handler(request, exc):
     return JSONResponse(status_code=401, content=UNAUTHORIZED_RESPONSE)
 
 
+def _normalize_daily_symbol(symbol: str | None) -> str:
+    normalized_symbol = symbol.strip() if symbol else ""
+    if not normalized_symbol:
+        raise HTTPException(status_code=400, detail="symbol is required")
+    return normalized_symbol
+
+
+def _parse_daily_days(days: str | None) -> int:
+    if days is None:
+        normalized_days = 60
+    else:
+        try:
+            normalized_days = int(days)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="days must be between 1 and 1000",
+            )
+
+    if normalized_days < 1 or normalized_days > 1000:
+        raise HTTPException(
+            status_code=400,
+            detail="days must be between 1 and 1000",
+        )
+
+    return normalized_days
+
+
+def _serialize_daily_bar(bar: dict) -> dict:
+    return {
+        "trade_date": bar["trade_date"],
+        "open": bar["open"],
+        "high": bar["high"],
+        "low": bar["low"],
+        "close": bar["close"],
+        "volume": bar["vol"],
+    }
+
+
 router = APIRouter(
     prefix="/api/data-service",
     dependencies=[Depends(require_data_service_api_key)],
@@ -58,48 +99,22 @@ async def get_daily_data(
     symbol: str | None = Query(default=None),
     days: str | None = Query(default=None),
 ):
-    normalized_symbol = symbol.strip() if symbol else ""
-    if not normalized_symbol:
-        raise HTTPException(status_code=400, detail="symbol is required")
+    normalized_symbol = _normalize_daily_symbol(symbol)
+    normalized_days = _parse_daily_days(days)
 
-    if days is None:
-        normalized_days = 60
-    else:
-        try:
-            normalized_days = int(days)
-        except (TypeError, ValueError):
-            raise HTTPException(
-                status_code=400,
-                detail="days must be between 1 and 1000",
-            )
+    try:
+        bars = get_latest_daily_bars(normalized_symbol, normalized_days)
+    except sqlite3.Error:
+        raise HTTPException(status_code=500, detail=DATABASE_UNAVAILABLE_DETAIL)
 
-    if normalized_days < 1 or normalized_days > 1000:
-        raise HTTPException(
-            status_code=400,
-            detail="days must be between 1 and 1000",
-        )
-
-    bars = get_latest_daily_bars(normalized_symbol, normalized_days)
     if bars is None:
-        raise HTTPException(status_code=500, detail="database unavailable")
-
-    response_bars = [
-        {
-            "trade_date": bar["trade_date"],
-            "open": bar["open"],
-            "high": bar["high"],
-            "low": bar["low"],
-            "close": bar["close"],
-            "volume": bar["vol"],
-        }
-        for bar in bars
-    ]
+        raise HTTPException(status_code=500, detail=DATABASE_UNAVAILABLE_DETAIL)
 
     return {
         "success": True,
         "data": {
             "symbol": normalized_symbol,
-            "count": len(response_bars),
-            "bars": response_bars,
+            "count": len(bars),
+            "bars": [_serialize_daily_bar(bar) for bar in bars],
         },
     }

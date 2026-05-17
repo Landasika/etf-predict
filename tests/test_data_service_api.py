@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import sqlite3
 
 import config
 from api import data_service
@@ -151,6 +152,52 @@ def test_data_service_daily_uses_default_days_when_omitted(monkeypatch):
     assert captured == {"symbol": "562360.SH", "days": 60}
 
 
+def test_data_service_daily_passes_trimmed_symbol_and_int_days_to_helper(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+    captured = {}
+
+    def fake_get_latest_daily_bars(symbol, days):
+        captured["symbol"] = symbol
+        captured["days"] = days
+        captured["days_type"] = type(days)
+        return []
+
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_daily_bars",
+        fake_get_latest_daily_bars,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily",
+        params={"symbol": " 562360.SH ", "days": "2"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    assert captured == {
+        "symbol": "562360.SH",
+        "days": 2,
+        "days_type": int,
+    }
+
+
+def test_data_service_daily_rejects_days_above_upper_bound(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily",
+        params={"symbol": "562360.SH", "days": 1001},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "days must be between 1 and 1000"}
+
+
 def test_data_service_daily_returns_bars_with_volume_mapping(monkeypatch):
     monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
     monkeypatch.setattr(
@@ -245,6 +292,30 @@ def test_data_service_daily_returns_500_when_database_unavailable(monkeypatch):
         data_service,
         "get_latest_daily_bars",
         lambda symbol, days: None,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily",
+        params={"symbol": "562360.SH"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "database unavailable"}
+
+
+def test_data_service_daily_returns_500_when_helper_raises_sqlite_error(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+
+    def raise_sqlite_error(symbol, days):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_daily_bars",
+        raise_sqlite_error,
         raising=False,
     )
 

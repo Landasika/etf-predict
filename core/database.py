@@ -245,21 +245,24 @@ def get_latest_daily_bars(ts_code: str, limit: int = 60) -> Optional[List[Dict]]
     if not conn:
         return None
 
-    cursor = conn.cursor()
-    cursor.execute(
-        '''
-        SELECT trade_date, open, high, low, close, vol
-        FROM etf_daily
-        WHERE ts_code = ?
-        ORDER BY trade_date DESC
-        LIMIT ?
-        ''',
-        (ts_code, limit),
-    )
-    results = cursor.fetchall()
-    conn.close()
-
-    return [dict(row) for row in results]
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            SELECT trade_date, open, high, low, close, vol
+            FROM etf_daily
+            WHERE ts_code = ?
+            ORDER BY trade_date DESC
+            LIMIT ?
+            ''',
+            (ts_code, limit),
+        )
+        results = cursor.fetchall()
+        return [dict(row) for row in results]
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
 
 
 def get_etf_info(ts_code: str) -> Optional[Dict]:
