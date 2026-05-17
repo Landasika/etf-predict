@@ -12,11 +12,13 @@ from typing import Optional, List
 import sys
 import os
 import logging
+import hmac
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
 from core.database import get_etf_info
 from core.auth import router as auth_router, require_auth
+from api.data_service import router as data_service_router
 
 app = FastAPI(title=config.API_TITLE, version=config.API_VERSION)
 logger = logging.getLogger(__name__)
@@ -47,12 +49,26 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if path in ["/login", "/logout"] or path.startswith("/login") or path.startswith("/logout"):
             return await call_next(request)
 
-        # 3. 检查session是否可用
+        # 3. 数据服务路由 - 使用 API Key 认证
+        if path == "/api/data-service" or path.startswith("/api/data-service/"):
+            api_key = request.headers.get("X-API-Key", "")
+            if not hmac.compare_digest(api_key, config.AUTH_KEY):
+                return JSONResponse(
+                    status_code=401,
+                    content={
+                        "error": "未认证",
+                        "message": "无效的 API Key",
+                        "code": "UNAUTHORIZED"
+                    }
+                )
+            return await call_next(request)
+
+        # 4. 检查session是否可用
         if "session" not in request.scope:
             # Session未配置，允许继续（可能有其他中间件处理）
             return await call_next(request)
 
-        # 4. 页面路由 - 需要认证，未认证则重定向
+        # 5. 页面路由 - 需要认证，未认证则重定向
         page_routes = ["/", "/macd-watchlist", "/profit", "/settings"]
         if path in page_routes or path.endswith("/"):
             if not request.session.get("authenticated"):
@@ -63,7 +79,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 return RedirectResponse(url="/login", status_code=302)
             return await call_next(request)
 
-        # 5. API路由 - 需要认证，未认证则返回401
+        # 6. API路由 - 需要认证，未认证则返回401
         if path.startswith("/api/"):
             if not request.session.get("authenticated"):
                 return JSONResponse(
@@ -76,7 +92,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 )
             return await call_next(request)
 
-        # 6. 其他路由 - 正常处理
+        # 7. 其他路由 - 正常处理
         return await call_next(request)
 
 # 添加中间件（注意顺序：后添加的先执行）
@@ -101,6 +117,7 @@ config.templates = templates
 
 # 注册认证路由
 app.include_router(auth_router, tags=["认证"])
+app.include_router(data_service_router, tags=["Data Service"])
 
 
 @app.on_event("startup")
