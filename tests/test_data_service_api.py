@@ -96,6 +96,61 @@ def test_data_service_daily_rejects_out_of_range_days(monkeypatch):
     assert response.json() == {"detail": "days must be between 1 and 1000"}
 
 
+def test_data_service_daily_rejects_non_numeric_days(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily",
+        params={"symbol": "562360.SH", "days": "abc"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "days must be between 1 and 1000"}
+
+
+def test_data_service_daily_rejects_blank_symbol(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily",
+        params={"symbol": "   "},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "symbol is required"}
+
+
+def test_data_service_daily_uses_default_days_when_omitted(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+    captured = {}
+
+    def fake_get_latest_daily_bars(symbol, days):
+        captured["symbol"] = symbol
+        captured["days"] = days
+        return []
+
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_daily_bars",
+        fake_get_latest_daily_bars,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily",
+        params={"symbol": "562360.SH"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    assert captured == {"symbol": "562360.SH", "days": 60}
+
+
 def test_data_service_daily_returns_bars_with_volume_mapping(monkeypatch):
     monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
     monkeypatch.setattr(

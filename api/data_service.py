@@ -56,18 +56,30 @@ async def health_check():
 @router.get("/daily")
 async def get_daily_data(
     symbol: str | None = Query(default=None),
-    days: int = Query(default=60),
+    days: str | None = Query(default=None),
 ):
     normalized_symbol = symbol.strip() if symbol else ""
     if not normalized_symbol:
         raise HTTPException(status_code=400, detail="symbol is required")
-    if days < 1 or days > 1000:
+
+    if days is None:
+        normalized_days = 60
+    else:
+        try:
+            normalized_days = int(days)
+        except (TypeError, ValueError):
+            raise HTTPException(
+                status_code=400,
+                detail="days must be between 1 and 1000",
+            )
+
+    if normalized_days < 1 or normalized_days > 1000:
         raise HTTPException(
             status_code=400,
             detail="days must be between 1 and 1000",
         )
 
-    bars = get_latest_daily_bars(normalized_symbol, days)
+    bars = get_latest_daily_bars(normalized_symbol, normalized_days)
     if bars is None:
         raise HTTPException(status_code=500, detail="database unavailable")
 
