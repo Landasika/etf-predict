@@ -12,16 +12,20 @@ from typing import Optional, List
 import sys
 import os
 import logging
-import hmac
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
 from core.database import get_etf_info
 from core.auth import router as auth_router, require_auth
-from api.data_service import router as data_service_router
+from api.data_service import (
+    DataServiceAuthError,
+    data_service_auth_exception_handler,
+    router as data_service_router,
+)
 
 app = FastAPI(title=config.API_TITLE, version=config.API_VERSION)
 logger = logging.getLogger(__name__)
+app.add_exception_handler(DataServiceAuthError, data_service_auth_exception_handler)
 
 # 导入必要的模块
 from starlette.responses import JSONResponse, Response
@@ -49,18 +53,8 @@ class AuthMiddleware(BaseHTTPMiddleware):
         if path in ["/login", "/logout"] or path.startswith("/login") or path.startswith("/logout"):
             return await call_next(request)
 
-        # 3. 数据服务路由 - 使用 API Key 认证
+        # 3. 数据服务路由 - 跳过 session 认证，路由依赖中处理 API Key
         if path == "/api/data-service" or path.startswith("/api/data-service/"):
-            api_key = request.headers.get("X-API-Key", "")
-            if not hmac.compare_digest(api_key, config.AUTH_KEY):
-                return JSONResponse(
-                    status_code=401,
-                    content={
-                        "error": "未认证",
-                        "message": "无效的 API Key",
-                        "code": "UNAUTHORIZED"
-                    }
-                )
             return await call_next(request)
 
         # 4. 检查session是否可用
