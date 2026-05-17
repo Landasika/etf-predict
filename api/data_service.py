@@ -47,13 +47,22 @@ def _normalize_daily_symbol(symbol: str | None) -> str:
 
 
 def _normalize_daily_symbols(symbols: str | None) -> list[str]:
-    normalized_symbols = [
+    raw_symbols = [
         symbol.strip()
         for symbol in (symbols or "").split(",")
         if symbol.strip()
     ]
-    if not normalized_symbols:
+    if not raw_symbols:
         raise HTTPException(status_code=400, detail="symbols is required")
+
+    normalized_symbols = []
+    seen_symbols = set()
+    for symbol in raw_symbols:
+        if symbol in seen_symbols:
+            continue
+        seen_symbols.add(symbol)
+        normalized_symbols.append(symbol)
+
     return normalized_symbols
 
 

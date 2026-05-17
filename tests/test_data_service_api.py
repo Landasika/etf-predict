@@ -413,6 +413,68 @@ def test_data_service_daily_batch_returns_latest_bars_for_each_symbol(monkeypatc
     assert calls == [("562360.SH", 2), ("510300.SH", 2)]
 
 
+def test_data_service_daily_batch_deduplicates_symbols_before_querying(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+    calls = []
+
+    def fake_get_latest_daily_bars(symbol, days):
+        calls.append((symbol, days))
+        return []
+
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_daily_bars",
+        fake_get_latest_daily_bars,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily/batch",
+        params={"symbols": "562360.SH,510300.SH,562360.SH"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "data": {
+            "count": 2,
+            "bars": {
+                "562360.SH": [],
+                "510300.SH": [],
+            },
+        },
+    }
+    assert calls == [("562360.SH", 5), ("510300.SH", 5)]
+
+
+def test_data_service_daily_batch_uses_default_days_of_five_when_omitted(monkeypatch):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+    calls = []
+
+    def fake_get_latest_daily_bars(symbol, days):
+        calls.append((symbol, days))
+        return []
+
+    monkeypatch.setattr(
+        data_service,
+        "get_latest_daily_bars",
+        fake_get_latest_daily_bars,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily/batch",
+        params={"symbols": "562360.SH"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    assert calls == [("562360.SH", 5)]
+
+
 def test_data_service_daily_batch_date_mode_uses_exact_date_and_ignores_days(monkeypatch):
     monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
     exact_date_calls = []
@@ -593,6 +655,28 @@ def test_data_service_daily_batch_returns_500_when_exact_date_helper_raises_sqli
         data_service,
         "get_daily_bars_by_exact_date",
         raise_sqlite_error,
+        raising=False,
+    )
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/data-service/daily/batch",
+        params={"symbols": "562360.SH", "date": "20240517"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "database unavailable"}
+
+
+def test_data_service_daily_batch_returns_500_when_exact_date_helper_returns_none(
+    monkeypatch,
+):
+    monkeypatch.setattr(config, "AUTH_KEY", "test-api-key")
+    monkeypatch.setattr(
+        data_service,
+        "get_daily_bars_by_exact_date",
+        lambda symbol, trade_date: None,
         raising=False,
     )
 
