@@ -22,32 +22,9 @@ class FeishuNotifier:
         self.config = {}
         self.load_config()
 
-    def load_config(self):
-        """从 conf.json 加载飞书配置"""
-        try:
-            if CONF_FILE.exists():
-                # 读取完整的 conf.json
-                with open(CONF_FILE, 'r', encoding='utf-8') as f:
-                    full_config = json.load(f)
-
-                # 获取飞书配置部分
-                if "feishu" in full_config:
-                    self.config = full_config["feishu"]
-                    logger.info(f"飞书配置加载成功: {len(self.config.get('bots', []))} 个机器人")
-                else:
-                    logger.warning("conf.json 中未找到 feishu 配置，使用默认配置")
-                    self._create_default_config()
-            else:
-                # conf.json 不存在，创建默认配置
-                logger.info("conf.json 不存在，创建默认配置")
-                self._create_default_config()
-        except Exception as e:
-            logger.error(f"加载飞书配置失败: {e}")
-            self.config = {"enabled": False, "bots": []}
-
-    def _create_default_config(self):
-        """创建默认的飞书配置"""
-        self.config = {
+    def _get_default_config(self) -> dict:
+        """获取默认飞书配置"""
+        return {
             "enabled": False,
             "default_bot": "bot_1",
             "bots": [
@@ -67,6 +44,108 @@ class FeishuNotifier:
                 "error_alerts": True
             }
         }
+
+    def _has_usable_bot_config(self, config_data: Optional[dict] = None) -> bool:
+        """检查配置中是否存在可用的机器人"""
+        config_data = config_data or self.config
+        bots = config_data.get("bots", []) if isinstance(config_data, dict) else []
+
+        for bot in bots:
+            if (
+                bot.get("enabled", True)
+                and bot.get("app_id")
+                and bot.get("app_secret")
+                and bot.get("chat_id")
+            ):
+                return True
+
+        return False
+
+    def _load_config_from_env(self) -> Optional[dict]:
+        """从环境变量加载飞书配置"""
+        bots = []
+        index = 1
+
+        while True:
+            name = os.getenv(f"BOT_{index}_NAME")
+            app_id = os.getenv(f"BOT_{index}_APP_ID")
+            app_secret = os.getenv(f"BOT_{index}_APP_SECRET")
+            chat_id = os.getenv(f"BOT_{index}_CHAT_ID")
+
+            if not any([name, app_id, app_secret, chat_id]):
+                break
+
+            if all([app_id, app_secret, chat_id]):
+                bots.append(
+                    {
+                        "id": f"bot_{index}",
+                        "name": name or f"bot_{index}",
+                        "app_id": app_id,
+                        "app_secret": app_secret,
+                        "chat_id": chat_id,
+                        "enabled": True,
+                    }
+                )
+
+            index += 1
+
+        single_app_id = os.getenv("FEISHU_APP_ID")
+        single_app_secret = os.getenv("FEISHU_APP_SECRET")
+        single_chat_id = os.getenv("FEISHU_CHAT_ID")
+        single_name = os.getenv("FEISHU_BOT_NAME") or os.getenv("DEFAULT_BOT", "default")
+
+        if all([single_app_id, single_app_secret, single_chat_id]) and not bots:
+            bots.append(
+                {
+                    "id": "bot_1",
+                    "name": single_name,
+                    "app_id": single_app_id,
+                    "app_secret": single_app_secret,
+                    "chat_id": single_chat_id,
+                    "enabled": True,
+                }
+            )
+
+        if not bots:
+            return None
+
+        env_config = self._get_default_config()
+        env_config["enabled"] = True
+        env_config["default_bot"] = bots[0]["id"]
+        env_config["bots"] = bots
+        return env_config
+
+    def load_config(self):
+        """从 conf.json 加载飞书配置"""
+        try:
+            if CONF_FILE.exists():
+                # 读取完整的 conf.json
+                with open(CONF_FILE, 'r', encoding='utf-8') as f:
+                    full_config = json.load(f)
+
+                # 获取飞书配置部分
+                if "feishu" in full_config:
+                    self.config = full_config["feishu"]
+                    logger.info(f"飞书配置加载成功: {len(self.config.get('bots', []))} 个机器人")
+                else:
+                    logger.warning("conf.json 中未找到 feishu 配置")
+            else:
+                logger.info("conf.json 不存在")
+
+            env_config = self._load_config_from_env()
+            if not self._has_usable_bot_config() and env_config:
+                self.config = env_config
+                logger.info("飞书配置已回退到环境变量")
+            elif not self.config:
+                logger.warning("未找到可用的飞书配置，使用默认配置")
+                self._create_default_config()
+        except Exception as e:
+            logger.error(f"加载飞书配置失败: {e}")
+            self.config = {"enabled": False, "bots": []}
+
+    def _create_default_config(self):
+        """创建默认的飞书配置"""
+        self.config = self._get_default_config()
         self.save_config_to_file()
 
     def save_config_to_file(self):
