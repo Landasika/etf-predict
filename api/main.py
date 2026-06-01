@@ -258,6 +258,13 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
     if not refresh and not realtime:
         cached = get_batch_cache('signals', cache_data_date)
         if cached:
+            from core.position_manager import get_all_positions
+            db_positions = {p['etf_code']: p for p in get_all_positions()}
+            for r in cached.get('data', []):
+                db = db_positions.get(r.get('code', ''), {})
+                r['db_position'] = db.get('current_positions', 0)
+                r['db_shares'] = db.get('total_shares', 0)
+                r['db_avg_cost'] = db.get('avg_cost', 0)
             return {
                 'success': True,
                 'data': cached.get('data', []),
@@ -411,6 +418,15 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
             'count': len(results)
         }
         set_batch_cache('signals', cache_data_date, cache_data)
+
+    # 批量读取DB持仓，合并到结果中
+    from core.position_manager import get_all_positions
+    db_positions = {p['etf_code']: p for p in get_all_positions()}
+    for r in results:
+        db = db_positions.get(r['code'], {})
+        r['db_position'] = db.get('current_positions', 0)
+        r['db_shares'] = db.get('total_shares', 0)
+        r['db_avg_cost'] = db.get('avg_cost', 0)
 
     return {
         'success': True,
@@ -1608,6 +1624,8 @@ async def trigger_data_update(background_tasks: BackgroundTasks):
         try:
             from scripts.auto_update_data import run_auto_update
             run_auto_update(force=False)
+            from core.position_manager import run_auto_sync_all
+            run_auto_sync_all()
         except Exception as e:
             logger = logging.getLogger(__name__)
             logger.error(f"数据更新失败: {e}")
@@ -2154,6 +2172,153 @@ async def reload_system_config():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f'重新加载配置失败: {str(e)}')
+
+
+# ==================== 持仓管理 API ====================
+
+@app.get("/api/positions")
+async def list_positions():
+    """获取所有ETF的当前持仓"""
+    from core.position_manager import get_all_positions
+
+    positions = get_all_positions()
+    return {
+        'success': True,
+        'data': positions,
+        'count': len(positions),
+    }
+
+
+@app.get("/api/positions/{etf_code}")
+async def get_etf_position(etf_code: str):
+    """获取单个ETF的当前持仓"""
+    from core.position_manager import get_position
+
+    pos = get_position(etf_code)
+    if not pos:
+        return {
+            'success': True,
+            'data': None,
+            'message': f'{etf_code} 暂无持仓记录',
+        }
+    return {
+        'success': True,
+        'data': pos,
+    }
+
+
+@app.get("/api/positions/{etf_code}/suggestion")
+async def get_position_suggestion(etf_code: str, strategy: Optional[str] = None):
+    """获取ETF持仓调整建议
+
+    对比信号target_position与DB当前仓位，返回操作建议。
+    """
+    from core.position_manager import get_position_suggestion as pos_suggestion
+    from core.watchlist import load_watchlist, calculate_realtime_signal
+
+    # 从信号获取 target_position
+    signal_result = calculate_realtime_signal(etf_code, config.DEFAULT_START_DATE, strategy)
+    if not signal_result['success']:
+        raise HTTPException(status_code=400, detail=signal_result.get('message', '信号计算失败'))
+
+    target_position = signal_result['data'].get('positions_used', 0)
+    latest_price = signal_result['data'].get('latest_data', {}).get('close', None)
+
+    suggestion = pos_suggestion(etf_code, target_position, latest_price)
+
+    # 附加快照信息
+    watchlist = load_watchlist()
+    etf_entry = next((e for e in watchlist.get('etfs', []) if e['code'] == etf_code), None)
+    strategy_used = strategy or (etf_entry.get('strategy', 'macd_aggressive') if etf_entry else 'macd_aggressive')
+
+    return {
+        'success': True,
+        'data': {
+            **suggestion,
+            'strategy': strategy_used,
+            'signal_date': signal_result['data'].get('latest_date'),
+        },
+    }
+
+
+@app.post("/api/positions/{etf_code}/execute")
+async def execute_position_change(etf_code: str, request: Request):
+    """执行持仓变更
+
+    Body: {
+        "action": "BUY" | "SELL",
+        "price": 1.234,
+        "positions_before": 3,
+        "positions_after": 5,
+        "strategy": "macd_aggressive"
+    }
+    """
+    from core.position_manager import execute_position_change as exec_change
+
+    data = await request.json()
+    action = data.get('action')
+    price = data.get('price')
+    positions_before = data.get('positions_before')
+    positions_after = data.get('positions_after')
+    strategy = data.get('strategy')
+
+    if not all([action, price is not None, positions_before is not None, positions_after is not None]):
+        raise HTTPException(status_code=400, detail='缺少必要参数: action, price, positions_before, positions_after')
+
+    if action not in ('BUY', 'SELL'):
+        raise HTTPException(status_code=400, detail='action 必须是 BUY 或 SELL')
+
+    result = exec_change(
+        etf_code=etf_code,
+        action=action,
+        price=float(price),
+        positions_before=int(positions_before),
+        positions_after=int(positions_after),
+        strategy=strategy,
+    )
+
+    if not result.get('success'):
+        return {
+            'success': True,
+            'data': result,
+            'message': result.get('message', '无需操作'),
+        }
+
+    return {
+        'success': True,
+        'data': result,
+        'message': f'{etf_code} {action} {result["shares"]}股 @ {price}',
+    }
+
+
+@app.get("/api/trades")
+async def list_trades(
+    etf_code: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 200,
+):
+    """查询交易记录"""
+    from core.position_manager import get_trades
+
+    trades = get_trades(etf_code=etf_code, start_date=start_date, end_date=end_date, limit=limit)
+    return {
+        'success': True,
+        'data': trades,
+        'count': len(trades),
+    }
+
+
+@app.get("/api/positions/{etf_code}/pnl")
+async def get_etf_pnl(etf_code: str):
+    """获取ETF的实际盈亏（基于交易记录FIFO计算）"""
+    from core.position_manager import calculate_pnl
+
+    pnl = calculate_pnl(etf_code)
+    return {
+        'success': True,
+        'data': pnl,
+    }
 
 
 if __name__ == "__main__":

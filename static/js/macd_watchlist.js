@@ -208,7 +208,8 @@ function renderWatchlist(etfs) {
             'macd_kdj_discrete': 'MACD+KDJ离散',
             'rsi_macd_kdj_triple': '三指标共振',
             'pure_rsi': '纯RSI',
-            'rsi_triple_lines': 'RSI三线'
+            'rsi_triple_lines': 'RSI三线',
+            'macd_histogram_momentum': 'MACD柱动量'
         };
         const strategyName = strategyMap[etf.strategy] || 'MACD';
 

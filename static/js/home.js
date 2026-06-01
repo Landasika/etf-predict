@@ -298,7 +298,12 @@ function renderStrategyTable(data) {
                     ${stockReturn >= 0 ? '+' : ''}${stockReturn.toFixed(2)}%
                 </span>
             </td>
-            <td>${item.positions_used}</td>
+            <td>
+                <strong>${item.db_position !== undefined ? item.db_position : item.positions_used}仓</strong>
+                ${item.db_position !== undefined && item.db_position !== item.positions_used
+                    ? ` <span style="font-size:11px;color:#f59e0b;">→信号${item.positions_used}仓</span>`
+                    : ''}
+            </td>
             <td>
                 <span class="${getProfitClass(item.daily_change_pct || 0)}">
                     ${(item.daily_change_pct || 0) >= 0 ? '+' : ''}${(item.daily_change_pct || 0).toFixed(2)}%
@@ -310,6 +315,7 @@ function renderStrategyTable(data) {
             <td>
                 <div class="action-buttons">
                     <a href="/macd-watchlist#${item.code}" class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px;">详情</a>
+                    <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px; background: #fef3c7; border-color: #f59e0b; color: #92400e;" onclick="openTradeModal('${item.code}', ${item.db_position || 0}, ${item.positions_used}, ${item.price || 0}, '${item.strategy || 'macd_aggressive'}')">调整</button>
                     <button class="btn btn-danger" onclick="removeEtf('${item.code}')">删除</button>
                 </div>
             </td>
@@ -546,7 +552,11 @@ function getShortStrategyName(strategy) {
         'optimized_t_trading': '做T优化',
         'macd_kdj': 'MACD+KDJ',
         'multifactor': '多因子',
-        'macd_kdj_discrete': 'MACD+KDJ离散'
+        'macd_kdj_discrete': 'MACD+KDJ离散',
+        'rsi_macd_kdj_triple': '三指标共振',
+        'pure_rsi': '纯RSI',
+        'rsi_triple_lines': 'RSI三线',
+        'macd_histogram_momentum': 'MACD柱动量'
     };
     return nameMap[strategy] || strategy;
 }
@@ -1797,4 +1807,57 @@ async function loadAdvice() {
         console.error('加载建议失败:', error);
         adviceContent.innerHTML = '<div class="error">加载失败: ' + error.message + '</div>';
     }
+}
+
+// ---- 持仓调整 ----
+function openTradeModal(code, dbPos, sigPos, price, strategy) {
+    document.getElementById('tradeEtfCode').value = code;
+    document.getElementById('tradePrice').value = price || '';
+    document.getElementById('tradePosBefore').value = dbPos;
+    document.getElementById('tradeAction').value = dbPos > sigPos ? 'SELL' : 'BUY';
+    document.getElementById('tradePosAfter').value = sigPos;
+    document.getElementById('tradeModal').style.display = 'flex';
+    updateTradePreview();
+}
+
+function closeTradeModal() {
+    document.getElementById('tradeModal').style.display = 'none';
+}
+
+function updateTradePreview() {
+    const action = document.getElementById('tradeAction').value;
+    const price = parseFloat(document.getElementById('tradePrice').value) || 0;
+    const before = parseInt(document.getElementById('tradePosBefore').value) || 0;
+    const after = parseInt(document.getElementById('tradePosAfter').value) || 0;
+    const delta = Math.abs(after - before);
+    const amount = delta * 200;
+    const shares = price > 0 ? Math.floor(amount / price) : 0;
+    const preview = document.getElementById('tradePreview');
+    if (delta === 0) {
+        preview.style.display = 'block';
+        preview.innerHTML = '仓位无变化';
+    } else {
+        preview.style.display = 'block';
+        preview.innerHTML = (action === 'BUY' ? '买入' : '卖出') + ' <b>' + delta + '</b> 仓 = <b>' + amount + '元</b>，约 <b>' + shares + '</b> 股 @ ' + price + '<br>仓位: ' + before + ' → ' + after;
+    }
+}
+
+async function executeTrade() {
+    const code = document.getElementById('tradeEtfCode').value;
+    const action = document.getElementById('tradeAction').value;
+    const price = parseFloat(document.getElementById('tradePrice').value);
+    const before = parseInt(document.getElementById('tradePosBefore').value);
+    const after = parseInt(document.getElementById('tradePosAfter').value);
+
+    if (!price || before === after) { alert('请填写完整'); return; }
+    try {
+        const res = await fetch('/api/positions/' + code + '/execute', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action, price, positions_before: before, positions_after: after, strategy: 'manual' })
+        });
+        const data = await res.json();
+        if (data.success) { alert(data.message); closeTradeModal(); location.reload(); }
+        else { alert('失败: ' + JSON.stringify(data)); }
+    } catch (e) { alert('请求失败: ' + e.message); }
 }

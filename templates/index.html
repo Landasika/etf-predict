@@ -37,6 +37,7 @@
                 <span class="current-page">策略汇总</span>
                 <a href="/macd-watchlist">详细策略</a>
                 <a href="/profit">💰 收益情况</a>
+                <a href="/positions">📊 持仓管理</a>
                 <a href="/settings">⚙️ 系统设置</a>
                 <a href="/logout" class="logout-link" style="color: #ef4444;">🚪 登出</a>
             </nav>
@@ -310,6 +311,46 @@
         </div>
     </div>
 
-    <script src="/static/js/home.js?v=80"></script>
+    <!-- 持仓调整弹窗 -->
+    <div id="tradeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>调整持仓</h3>
+                <span class="close" onclick="closeTradeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>ETF</label>
+                    <input type="text" id="tradeEtfCode" readonly style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+                </div>
+                <div class="form-group">
+                    <label>操作方向</label>
+                    <select id="tradeAction" onchange="updateTradePreview()" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+                        <option value="BUY">买入</option>
+                        <option value="SELL">卖出</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>价格</label>
+                    <input type="number" id="tradePrice" step="0.001" onchange="updateTradePreview()" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+                </div>
+                <div class="form-group">
+                    <label>当前仓位 (0-10)</label>
+                    <input type="number" id="tradePosBefore" min="0" max="10" onchange="updateTradePreview()" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+                </div>
+                <div class="form-group">
+                    <label>目标仓位 (0-10)</label>
+                    <input type="number" id="tradePosAfter" min="0" max="10" onchange="updateTradePreview()" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;">
+                </div>
+                <div id="tradePreview" style="padding:12px;background:#f8fafc;border-radius:8px;font-size:13px;display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeTradeModal()">取消</button>
+                <button class="btn btn-primary" onclick="executeTrade()">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/home.js?v=82"></script>
 </body>
 </html>

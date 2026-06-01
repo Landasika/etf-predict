@@ -68,6 +68,10 @@ STRATEGY_TYPES = {
     'rsi_triple_lines': {
         'name': 'RSI三线金叉死叉策略',
         'description': 'RSI(6/12/24)三线金叉死叉+多空排列，0-10成趋势仓位管理'
+    },
+    'macd_histogram_momentum': {
+        'name': 'MACD量能柱动量策略',
+        'description': '基于MACD柱体变化方向和加速度，0-10成动态仓位管理，比金叉死叉快1-3天'
     }
 }
 
@@ -527,6 +531,9 @@ def calculate_realtime_signal(etf_code: str, start_date: str = '20250101', strat
     elif strategy == 'rsi_triple_lines':
         # RSI三线金叉死叉策略
         return calculate_realtime_signal_rsi_triple_lines(etf_code, start_date, etf_settings)
+    elif strategy == 'macd_histogram_momentum':
+        # MACD量能柱动量策略
+        return calculate_realtime_signal_macd_histogram_momentum(etf_code, start_date, etf_settings)
     else:
         return {
             'success': False,
@@ -2017,81 +2024,222 @@ def _generate_next_action_rsi_triple_lines(positions_used: int, latest_signal: D
         return f"ℹ️ {signal_reason}，当前持仓{positions_used}成"
 
 
-def run_backtest(etf_code: str, start_date: str = '20250101', strategy: str = None) -> Dict:
-    """运行回测
+def calculate_realtime_signal_macd_histogram_momentum(etf_code: str, start_date: str = '20250101', etf_settings: Dict = None) -> Dict:
+    """计算MACD量能柱动量策略的实时信号"""
+    if etf_settings is None:
+        etf_settings = {}
 
-    Args:
-        etf_code: ETF代码
-        start_date: 开始日期
-        strategy: 策略类型（如果不指定，从watchlist读取）
+    initial_capital = etf_settings.get('initial_capital', 2000)
+    total_positions = etf_settings.get('total_positions', 10)
+    build_position_date = etf_settings.get('build_position_date', None)
+    optimized_params = etf_settings.get('optimized_histogram_params', None)
 
-    Returns:
-        回测结果
-    """
-    # 从watchlist读取ETF设置（包括优化参数）
-    watchlist = load_watchlist()
-    optimized_macd_params = None
-    initial_capital = 2000
-    num_positions = 10
-    build_date = None
+    def safe_float(value, default=0.0):
+        if value is None:
+            return default
+        try:
+            f = float(value)
+            return default if (np.isnan(f) or np.isinf(f)) else f
+        except (ValueError, TypeError):
+            return default
 
-    for etf in watchlist['etfs']:
-        if etf['code'] == etf_code:
-            if strategy is None:
-                strategy = etf.get('strategy', 'macd_aggressive')
-            # 读取优化参数
-            optimized_macd_params = etf.get('optimized_macd_params', None)
-            # 读取其他设置
-            initial_capital = etf.get('initial_capital', 2000)
-            num_positions = etf.get('total_positions', 10)
-            build_date = etf.get('build_position_date', None)
-            break
-    else:
-        if strategy is None:
-            strategy = 'macd_aggressive'
+    def safe_int(value, default=0):
+        try:
+            return int(float(value))
+        except (ValueError, TypeError):
+            return default
 
-    # 根据策略类型调用不同的回测函数
-    if strategy == 'macd_aggressive':
-        # MACD激进策略
-        return run_macd_backtest(etf_code, start_date, strategy=strategy,
-                                  initial_capital=initial_capital,
-                                  num_positions=num_positions,
-                                  build_date=build_date,
-                                  optimized_macd_params=optimized_macd_params)
-    elif strategy == 'macd_kdj_discrete':
-        # MACD+KDJ离散仓位系统
-        return calculate_realtime_signal_macd_kdj_discrete(etf_code, start_date, {
-            'initial_capital': initial_capital,
-            'total_positions': num_positions,
-            'build_position_date': build_date
-        })
-    elif strategy == 'rsi_macd_kdj_triple':
-        # RSI+MACD+KDJ三指标共振策略
-        return calculate_realtime_signal_rsi_macd_kdj_triple(etf_code, start_date, {
-            'initial_capital': initial_capital,
-            'total_positions': num_positions,
-            'build_position_date': build_date
-        })
-    elif strategy == 'pure_rsi':
-        # 纯RSI 0-10仓策略
-        return calculate_realtime_signal_pure_rsi(etf_code, start_date, {
-            'initial_capital': initial_capital,
-            'total_positions': num_positions,
-            'build_position_date': build_date
-        })
-    elif strategy == 'rsi_triple_lines':
-        # RSI三线金叉死叉策略
-        return calculate_realtime_signal_rsi_triple_lines(etf_code, start_date, {
-            'initial_capital': initial_capital,
-            'total_positions': num_positions,
-            'build_position_date': build_date
-        })
+    data = get_etf_daily_data(etf_code, start_date)
+    if not data or len(data) < 60:
+        return {
+            'success': False,
+            'message': f'数据不足（至少需要60天，当前有{len(data) if data else 0}天）',
+            'data': None
+        }
+
+    df = pd.DataFrame(data)
+
+    from strategies.macd_histogram_momentum import MACDHistogramMomentumSignalGenerator
+    signal_gen = MACDHistogramMomentumSignalGenerator(optimized_params)
+    df = signal_gen.generate_signals(df)
+
+    from strategies.macd_histogram_momentum_backtester import MACDHistogramMomentumBacktester
+    backtester = MACDHistogramMomentumBacktester(
+        initial_capital=initial_capital,
+        num_positions=total_positions
+    )
+
+    backtest_result = backtester.run_backtest(etf_code, start_date, signal_params=optimized_params)
+
+    if not backtest_result['success']:
+        return {
+            'success': False,
+            'message': f'回测失败: {backtest_result.get("message", "未知错误")}',
+            'data': None
+        }
+
+    trades = backtest_result.get('trades', [])
+    performance = backtest_result.get('performance', [])
+    metrics = backtest_result.get('metrics', {})
+
+    if isinstance(performance, pd.DataFrame):
+        performance = performance.to_dict('records')
+    elif not isinstance(performance, list):
+        performance = []
+
+    if len(performance) > 0:
+        dates = [p['date'] for p in performance]
+        prices = [safe_float(p['price']) for p in performance]
+        strategy_values = [safe_float(p['portfolio_value']) - initial_capital for p in performance]
+        initial_price = safe_float(performance[0]['price'])
+        if initial_price > 0:
+            benchmark_values = [safe_float((safe_float(p['price']) - initial_price) / initial_price * initial_capital) for p in performance]
+        else:
+            benchmark_values = [0.0] * len(performance)
+        volumes = [safe_float(p.get('vol', 0)) for p in performance]
     else:
         return {
             'success': False,
-            'message': f'不支持的策略类型: {strategy}',
+            'message': '回测数据格式错误',
             'data': None
         }
+
+    latest = df.iloc[-1]
+    current_positions = performance[-1].get('positions_used', 0) if performance else 0
+    previous_positions = performance[-2].get('positions_used', 0) if len(performance) > 1 else 0
+
+    if current_positions > previous_positions:
+        signal_type = 'BUY'
+    elif current_positions < previous_positions:
+        signal_type = 'SELL'
+    else:
+        signal_type = 'HOLD'
+
+    buy_signals = [
+        {'date': t['date'], 'price': t['price'], 'positions': t.get('positions_added', 0)}
+        for t in trades if t['type'] == 'BUY'
+    ]
+    sell_signals = [
+        {'date': t['date'], 'price': t['price'], 'reason': t.get('reason', 'SIGNAL'),
+         'positions_closed': t.get('positions_closed', 0)}
+        for t in trades if t['type'] == 'SELL'
+    ]
+
+    latest_signal = {
+        'date': str(latest.get('date', latest.get('trade_date', ''))),
+        'close': safe_float(latest['close']),
+        'macd_dif': safe_float(latest.get('macd_dif', 0)),
+        'macd_dea': safe_float(latest.get('macd_dea', 0)),
+        'macd_hist': safe_float(latest.get('macd_hist', 0)),
+        'hist_state': str(latest.get('hist_state', '')),
+        'hist_direction': str(latest.get('hist_direction', '')),
+        'hist_acceleration': str(latest.get('hist_acceleration', '')),
+        'ma20': safe_float(latest.get('ma20', 0)),
+        'ma20_slope': str(latest.get('ma20_slope', '')),
+        'target_position': safe_int(latest.get('target_position', 0)),
+        'signal_strength': safe_float(current_positions / 10.0),
+        'signal_type': signal_type,
+        'positions_used': safe_int(current_positions),
+        'previous_positions_used': safe_int(previous_positions),
+        'signal_reason': str(latest.get('signal_reason', ''))
+    }
+
+    next_action = _generate_next_action_histogram(current_positions, latest_signal)
+
+    result = {
+        'success': True,
+        'data': {
+            'latest_date': latest_signal['date'],
+            'position_value': safe_float(metrics.get('final_capital', initial_capital)),
+            'profit': safe_float(metrics.get('final_capital', initial_capital)) - initial_capital,
+            'profit_pct': safe_float(metrics.get('total_return_pct', 0)),
+            'positions_used': safe_int(current_positions),
+            'signal_strength': safe_float(latest_signal['signal_strength']),
+            'next_action': next_action,
+            'latest_data': latest_signal,
+            'backtest_summary': {
+                'trades': safe_int(metrics.get('total_trades', 0)),
+                'total_return_pct': safe_float(metrics.get('total_return_pct', 0)),
+                'buy_hold_return_pct': safe_float(metrics.get('buy_hold_return_pct', 0)),
+                'max_drawdown': safe_float(metrics.get('max_drawdown_pct', 0)),
+                'win_rate': safe_float(metrics.get('win_rate_pct', 0)),
+                'sharpe_ratio': safe_float(metrics.get('sharpe_ratio', 0)),
+                'initial_capital': safe_float(metrics.get('initial_capital', initial_capital)),
+                'build_position_date': build_position_date
+            },
+            'summary': {
+                'total_return_pct': safe_float(metrics.get('total_return_pct', 0)),
+                'benchmark_return_pct': safe_float(metrics.get('buy_hold_return_pct', 0)),
+                'sharpe_ratio': safe_float(metrics.get('sharpe_ratio', 0)),
+                'max_drawdown_pct': safe_float(metrics.get('max_drawdown_pct', 0)),
+                'win_rate': safe_float(metrics.get('win_rate_pct', 0)),
+                'total_trades': safe_int(metrics.get('total_trades', 0))
+            },
+            'dates': dates,
+            'prices': prices,
+            'volumes': volumes,
+            'strategy_values': strategy_values,
+            'benchmark_values': benchmark_values,
+            'buy_signals': buy_signals,
+            'sell_signals': sell_signals,
+            'performance': performance
+        },
+        'strategy': 'macd_histogram_momentum'
+    }
+
+    return clean_nan_values(result)
+
+
+def _generate_next_action_histogram(positions_used: int, latest_signal: Dict) -> str:
+    """生成MACD量能柱动量策略的操作建议"""
+    target_position = latest_signal.get('target_position', 0)
+    hist_state = latest_signal.get('hist_state', '')
+    signal_reason = latest_signal.get('signal_reason', '')
+
+    state_names = {
+        'STRONG_BULL': '强多',
+        'BULL_WEAKENING': '多转弱',
+        'BEAR_TO_BULL': '空转多',
+        'STRONG_BEAR': '强空',
+        'JUST_CROSSED_UP': '刚上零轴',
+        'JUST_CROSSED_DOWN': '刚下零轴',
+    }
+    state_cn = state_names.get(hist_state, hist_state)
+
+    if positions_used == 0:
+        if target_position >= 5:
+            return f"🔥 [{state_cn}] {signal_reason}，建议建仓{target_position}成"
+        elif target_position >= 3:
+            return f"⚡ [{state_cn}] {signal_reason}，可建仓{target_position}成"
+        elif target_position >= 1:
+            return f"👀 [{state_cn}] {signal_reason}，可小仓位试错"
+        else:
+            return f"⛔ [{state_cn}] 空仓观望"
+    elif positions_used <= 3:
+        if target_position > positions_used + 2:
+            return f"🔥 [{state_cn}] {signal_reason}，建议加仓至{target_position}成"
+        elif target_position > positions_used:
+            return f"✅ [{state_cn}] {signal_reason}，可小幅加仓"
+        elif target_position == positions_used:
+            return f"ℹ️ [{state_cn}] {signal_reason}，继续持有"
+        else:
+            return f"⚠️ [{state_cn}] {signal_reason}，建议减仓至{target_position}成"
+    elif positions_used <= 7:
+        if target_position >= 8:
+            return f"🔥 [{state_cn}] {signal_reason}，建议加仓至{target_position}成"
+        elif target_position > positions_used:
+            return f"✅ [{state_cn}] {signal_reason}，可继续加仓"
+        elif target_position == positions_used:
+            return f"ℹ️ [{state_cn}] {signal_reason}，继续持有"
+        else:
+            return f"⚠️ [{state_cn}] {signal_reason}，建议减仓至{target_position}成"
+    else:
+        if target_position >= 8:
+            return f"🔥 [{state_cn}] {signal_reason}，继续持有"
+        elif target_position >= 5:
+            return f"✅ [{state_cn}] {signal_reason}，继续持有"
+        else:
+            return f"⚠️ [{state_cn}] {signal_reason}，建议减仓至{target_position}成"
 
 
 def load_batch_signals_optimized(use_realtime: bool = False) -> list:
@@ -2143,4 +2291,92 @@ def load_batch_signals_optimized(use_realtime: bool = False) -> list:
                 results.append(signal_result)
 
     return results
+
+
+def run_backtest(etf_code: str, start_date: str = '20250101', strategy: str = None) -> Dict:
+    """运行回测
+
+    Args:
+        etf_code: ETF代码
+        start_date: 开始日期
+        strategy: 策略类型（如果不指定，从watchlist读取）
+
+    Returns:
+        回测结果
+    """
+    # 从watchlist读取ETF设置（包括优化参数）
+    watchlist = load_watchlist()
+    optimized_macd_params = None
+    optimized_histogram_params = None
+    initial_capital = 2000
+    num_positions = 10
+    build_date = None
+
+    for etf in watchlist['etfs']:
+        if etf['code'] == etf_code:
+            if strategy is None:
+                strategy = etf.get('strategy', 'macd_aggressive')
+            # 读取优化参数
+            optimized_macd_params = etf.get('optimized_macd_params', None)
+            optimized_histogram_params = etf.get('optimized_histogram_params', None)
+            # 读取其他设置
+            initial_capital = etf.get('initial_capital', 2000)
+            num_positions = etf.get('total_positions', 10)
+            build_date = etf.get('build_position_date', None)
+            break
+    else:
+        if strategy is None:
+            strategy = 'macd_aggressive'
+
+    # 根据策略类型调用不同的回测函数
+    if strategy == 'macd_aggressive':
+        # MACD激进策略
+        return run_macd_backtest(etf_code, start_date, strategy=strategy,
+                                  initial_capital=initial_capital,
+                                  num_positions=num_positions,
+                                  build_date=build_date,
+                                  optimized_macd_params=optimized_macd_params)
+    elif strategy == 'macd_kdj_discrete':
+        # MACD+KDJ离散仓位系统
+        return calculate_realtime_signal_macd_kdj_discrete(etf_code, start_date, {
+            'initial_capital': initial_capital,
+            'total_positions': num_positions,
+            'build_position_date': build_date
+        })
+    elif strategy == 'rsi_macd_kdj_triple':
+        # RSI+MACD+KDJ三指标共振策略
+        return calculate_realtime_signal_rsi_macd_kdj_triple(etf_code, start_date, {
+            'initial_capital': initial_capital,
+            'total_positions': num_positions,
+            'build_position_date': build_date
+        })
+    elif strategy == 'pure_rsi':
+        # 纯RSI 0-10仓策略
+        return calculate_realtime_signal_pure_rsi(etf_code, start_date, {
+            'initial_capital': initial_capital,
+            'total_positions': num_positions,
+            'build_position_date': build_date
+        })
+    elif strategy == 'rsi_triple_lines':
+        # RSI三线金叉死叉策略
+        return calculate_realtime_signal_rsi_triple_lines(etf_code, start_date, {
+            'initial_capital': initial_capital,
+            'total_positions': num_positions,
+            'build_position_date': build_date
+        })
+    elif strategy == 'macd_histogram_momentum':
+        # MACD量能柱动量策略
+        return calculate_realtime_signal_macd_histogram_momentum(etf_code, start_date, {
+            'initial_capital': initial_capital,
+            'total_positions': num_positions,
+            'build_position_date': build_date,
+            'optimized_histogram_params': optimized_histogram_params,
+        })
+    else:
+        return {
+            'success': False,
+            'message': f'不支持的策略类型: {strategy}',
+            'data': None
+        }
+
 

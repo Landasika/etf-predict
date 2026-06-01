@@ -6,7 +6,7 @@ services:
     container_name: etf-predict
     restart: unless-stopped
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "8001:8000"
     environment:
       # 数据源配置
       - TUSHARE_TOKEN=${TUSHARE_TOKEN}

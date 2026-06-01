@@ -324,6 +324,14 @@ class DataUpdateScheduler:
 
             logger.info(f"✅ 定时更新任务完成: {self.update_status['last_result']}")
 
+            # 数据更新后自动同步持仓
+            try:
+                from core.position_manager import run_auto_sync_all
+                sync_result = run_auto_sync_all()
+                logger.info(f"📊 持仓同步: {sync_result['trades']}笔交易, {sync_result['locked']}个锁定")
+            except Exception as e:
+                logger.error(f"持仓同步失败: {e}")
+
         except Exception as e:
             logger.error(f"❌ 定时更新任务失败: {e}")
             self.update_status['last_result'] = '失败'
