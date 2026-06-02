@@ -54,11 +54,7 @@
                         <label>当前策略：</label>
                         <select id="strategySelect">
                             <option value="macd_aggressive">MACD激进策略</option>
-                            <option value="macd_kdj_discrete">MACD+KDJ离散仓位系统2.0</option>
-                            <option value="rsi_macd_kdj_triple">RSI+MACD+KDJ三指标共振策略</option>
-                            <option value="pure_rsi">纯RSI 0-10仓策略</option>
-                            <option value="rsi_triple_lines">RSI三线金叉死叉策略</option>
-                            <option value="macd_histogram_momentum">MACD量能柱动量策略</option>
+                            <option value="macd_aggressive_entry">MACD激进+柱衰竭提前入场</option>
                         </select>
                         <button id="updateStrategyBtn" class="btn-update">更新策略</button>
                         <span id="strategyStatus" class="strategy-status"></span>
@@ -435,24 +431,11 @@
                     <label>选择策略：</label>
                     <select id="addStrategySelect">
                         <option value="macd_aggressive">MACD激进策略</option>
-                        <option value="macd_kdj_discrete">MACD+KDJ离散仓位系统2.0</option>
-                        <option value="rsi_macd_kdj_triple">RSI+MACD+KDJ三指标共振策略</option>
-                        <option value="pure_rsi">纯RSI 0-10仓策略</option>
-                        <option value="rsi_triple_lines">RSI三线金叉死叉策略</option>
-                        <option value="macd_histogram_momentum">MACD量能柱动量策略</option>
+                        <option value="macd_aggressive_entry">MACD激进+柱衰竭提前入场</option>
                     </select>
                 </div>
                 <div class="modal-note" id="addModalNote">
-                    <p>💡 提示：MACD激进策略无需额外文件，可直接使用</p>
-                </div>
-                <div class="strategy-note" style="margin-top: 10px; padding: 10px; background: #f0fdf4; border-left: 3px solid #10b981; display: none;" id="strategyNote_macd_kdj_discrete">
-                    <strong>策略说明：</strong>
-                    <ul style="margin: 5px 0 0 20px;">
-                        <li>MACD判断趋势方向（BULL做多，BEAR空仓）</li>
-                        <li>KDJ确定0-10成离散仓位</li>
-                        <li>T日计算信号，T+1日执行</li>
-                        <li>仓位严格离散化：0/1/3/4/5/6/7/8/10成</li>
-                    </ul>
+                    <p>💡 提示：两种策略都基于MACD指标，柱衰竭策略可提前入场</p>
                 </div>
                 <button id="confirmAddBtn" class="btn btn-primary">确认添加</button>
                 <button id="cancelAddBtn" class="btn btn-secondary">取消</button>

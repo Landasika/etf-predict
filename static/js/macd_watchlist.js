@@ -202,6 +202,7 @@ function renderWatchlist(etfs) {
         // Get strategy short name
         const strategyMap = {
             'macd_aggressive': 'MACD激进',
+            'macd_aggressive_entry': 'MACD激进+柱衰竭',
             'optimized_t_trading': '做T优化',
             'macd_kdj': 'MACD+KDJ',
             'multifactor': '量化',
@@ -365,7 +366,7 @@ function updatePanelsByStrategy(strategy) {
     if (rsiIndicatorsPanel) rsiIndicatorsPanel.style.display = 'none';
     if (positionHistorySection) positionHistorySection.style.display = 'none';
 
-    if (strategy === 'macd_aggressive' || strategy === 'optimized_t_trading' || strategy === 'macd_kdj') {
+    if (strategy === 'macd_aggressive' || strategy === 'macd_aggressive_entry' || strategy === 'optimized_t_trading' || strategy === 'macd_kdj') {
         macdPanel.style.display = 'block';
         weightsPanel.style.display = 'none';
     } else if (strategy === 'macd_kdj_discrete') {
@@ -403,7 +404,7 @@ function updateOptimizeButtonVisibility(strategy) {
     const macdParamsSection = document.getElementById('macdParamsSection');
     if (macdParamsSection) {
         // MACD激进策略、MACD+KDJ离散策略和RSI三线策略显示优化按钮和参数区域
-        if (strategy === 'macd_aggressive' || strategy === 'macd_kdj_discrete' || strategy === 'rsi_triple_lines') {
+        if (strategy === 'macd_aggressive' || strategy === 'macd_aggressive_entry' || strategy === 'macd_kdj_discrete' || strategy === 'rsi_triple_lines') {
             macdParamsSection.style.display = 'flex';
         } else {
             macdParamsSection.style.display = 'none';
@@ -552,7 +553,7 @@ function updateRealtimeCard(data, strategy) {
     document.getElementById('nextAction').textContent = data.next_action || '--';
 
     // 根据策略类型更新对应的面板
-    if (strategy === 'macd_aggressive' || strategy === 'optimized_t_trading' || strategy === 'macd_kdj') {
+    if (strategy === 'macd_aggressive' || strategy === 'macd_aggressive_entry' || strategy === 'optimized_t_trading' || strategy === 'macd_kdj') {
         updateMacdIndicators(data.latest_data);
     } else if (strategy === 'macd_kdj_discrete') {
         updateMacdIndicators(data.latest_data);
@@ -1446,7 +1447,7 @@ function updateAddModalNote(strategy) {
         strategyNoteEl.style.display = 'none';
     }
 
-    if (strategy === 'macd_aggressive') {
+    if (strategy === 'macd_aggressive' || strategy === 'macd_aggressive_entry') {
         noteEl.innerHTML = '<p>💡 提示：MACD激进策略无需额外文件，可直接使用</p>';
     } else if (strategy === 'optimized_t_trading') {
         noteEl.innerHTML = '<p>✨ 推荐：优化做T策略，宽松止损-20% + 严格买入过滤 + 分批止盈</p>';

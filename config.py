@@ -30,6 +30,7 @@ def _get_env_bool(key, default=False):
     return value.lower() in ('true', '1', 'yes', 'on')
 
 DEFAULT_UPDATE_TIME = "15:05"
+DEFAULT_MACD_OPTIMIZATION_TIME = "23:00"
 DEFAULT_FEISHU_NOTIFICATION_TIMES = ["09:40", "10:40", "11:40", "13:40", "14:40"]
 DEFAULT_FEISHU_NOTIFICATION_TIMES_TEXT = ",".join(DEFAULT_FEISHU_NOTIFICATION_TIMES)
 DEFAULT_REALTIME_UPDATER_START_TIME = "09:25"
@@ -71,10 +72,14 @@ DEFAULT_CONFIG = {
         "end_time": DEFAULT_REALTIME_UPDATER_END_TIME,
         "update_interval": DEFAULT_REALTIME_UPDATER_INTERVAL
     },
+    "macd_optimization_schedule": {
+        "enabled": False,
+        "time": DEFAULT_MACD_OPTIMIZATION_TIME,
+        "lookback_days": 365
+    },
     "strategies": {
         "macd_aggressive": "MACD激进策略",
-        "optimized_t_trading": "优化做T策略",
-        "multifactor": "多因子量化策略"
+        "macd_aggressive_entry": "MACD激进+柱衰竭提前入场"
     }
 }
 
@@ -157,6 +162,12 @@ def _apply_env_overrides(config):
         config.setdefault('realtime_updater_schedule', {})['end_time'] = _get_env('REALTIME_UPDATER_END_TIME')
     if _get_env('REALTIME_UPDATER_INTERVAL'):
         config.setdefault('realtime_updater_schedule', {})['update_interval'] = int(_get_env('REALTIME_UPDATER_INTERVAL'))
+
+    # MACD参数优化调度配置
+    if _get_env('MACD_OPTIMIZATION_SCHEDULE_ENABLED') is not None:
+        config.setdefault('macd_optimization_schedule', {})['enabled'] = _get_env_bool('MACD_OPTIMIZATION_SCHEDULE_ENABLED')
+    if _get_env('MACD_OPTIMIZATION_SCHEDULE_TIME'):
+        config.setdefault('macd_optimization_schedule', {})['time'] = _get_env('MACD_OPTIMIZATION_SCHEDULE_TIME')
 
     return config
 

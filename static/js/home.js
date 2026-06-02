@@ -549,6 +549,7 @@ function getProfitClass(profit) {
 function getShortStrategyName(strategy) {
     const nameMap = {
         'macd_aggressive': 'MACD激进',
+        'macd_aggressive_entry': 'MACD激进+柱衰竭',
         'optimized_t_trading': '做T优化',
         'macd_kdj': 'MACD+KDJ',
         'multifactor': '多因子',
@@ -793,7 +794,7 @@ async function optimizeAllMACDParams() {
     console.log('🚀 optimizeAllMACDParams 函数被调用');
     // 获取所有使用MACD激进策略的ETF
     const macdAggressiveETFs = strategyData.filter(item =>
-        item.strategy === 'macd_aggressive' || item.strategy === 'MACD激进策略'
+        item.strategy === 'macd_aggressive' || item.strategy === 'macd_aggressive_entry' || item.strategy === 'MACD激进策略'
     );
 
     if (macdAggressiveETFs.length === 0) {
@@ -1064,6 +1065,13 @@ async function loadSchedulerSettings() {
             document.getElementById('schedulerEnabled').checked = status.enabled;
             document.getElementById('schedulerTime').value = status.update_time;
 
+            // MACD optimization settings
+            const macdOpt = status.macd_optimization;
+            if (macdOpt) {
+                document.getElementById('macdOptimizationEnabled').checked = macdOpt.enabled;
+                document.getElementById('macdOptimizationTime').value = macdOpt.time || '23:00';
+            }
+
             // 更新当前状态显示
             const statusSpan = document.getElementById('schedulerCurrentStatus');
             const nextRunSpan = document.getElementById('schedulerNextRunInfo');
@@ -1089,9 +1097,12 @@ async function loadSchedulerSettings() {
 async function saveSchedulerSettings() {
     const enabled = document.getElementById('schedulerEnabled').checked;
     const updateTime = document.getElementById('schedulerTime').value;
+    const macdOptEnabled = document.getElementById('macdOptimizationEnabled').checked;
+    const macdOptTime = document.getElementById('macdOptimizationTime').value;
 
     try {
-        const response = await fetch('/api/data-update/scheduler/configure', {
+        // Save data update schedule
+        const updateResponse = await fetch('/api/data-update/scheduler/configure', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -1100,15 +1111,31 @@ async function saveSchedulerSettings() {
             })
         });
 
-        const result = await response.json();
-
-        if (result.success) {
-            alert(result.message);
-            hideSchedulerSettings();
-            loadSchedulerStatus(); // 刷新状态
-        } else {
-            alert('保存失败: ' + result.message);
+        const updateResult = await updateResponse.json();
+        if (!updateResult.success) {
+            alert('数据更新定时保存失败: ' + updateResult.message);
+            return;
         }
+
+        // Save MACD optimization schedule
+        const macdResponse = await fetch('/api/macd/optimization/schedule/configure', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                enabled: macdOptEnabled,
+                time: macdOptTime
+            })
+        });
+
+        const macdResult = await macdResponse.json();
+        if (!macdResult.success) {
+            alert('MACD优化定时保存失败: ' + macdResult.message);
+            return;
+        }
+
+        alert('定时设置保存成功');
+        hideSchedulerSettings();
+        loadSchedulerStatus(); // 刷新状态
     } catch (error) {
         console.error('保存设置失败:', error);
         alert('保存失败: ' + error.message);

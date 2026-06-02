@@ -312,10 +312,16 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
         except Exception as e:
             daily_change_pct = 0.0
 
-        # 计算今日收益（基于昨天持仓）
-        # 今日收益 = 昨天持仓数 × 200 × (今日涨幅/100)
-        # 注意：今天的买卖是按收盘价执行的，不计入今日收益
-        yesterday_positions = latest_data.get('previous_positions_used', 0)
+        # 计算今日收益（基于昨天实际持仓，从数据库读取）
+        # 今日收益 = 昨天实际持仓数 × 200 × (今日涨幅/100)
+        yesterday_positions = 0
+        try:
+            from core.position_manager import get_position
+            pos = get_position(etf_code)
+            if pos:
+                yesterday_positions = pos.get('current_positions', 0)
+        except Exception:
+            yesterday_positions = 0
         daily_profit = yesterday_positions * 200 * (daily_change_pct / 100)
 
         # 提取 KDJ 数据
@@ -331,9 +337,9 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
             'position_cap': latest_data.get('kdj_position_cap', 10)
         }
 
-        # 计算今日操作
+        # 计算今日操作：信号目标仓位 vs 实际持仓
         current_positions = signal_data.get('positions_used', 0)
-        previous_positions = latest_data.get('previous_positions_used', 0)
+        previous_positions = yesterday_positions  # 使用数据库实际持仓
         today_action = current_positions - previous_positions
 
         # 确定操作原因
@@ -569,7 +575,6 @@ async def list_macd_strategies():
     strategies = [
         {"name": "default", "params": get_strategy_params('default')},
         {"name": "aggressive", "params": get_strategy_params('aggressive')},
-        {"name": "optimized_t_trading", "params": get_strategy_params('optimized_t_trading')},
         {"name": "conservative", "params": get_strategy_params('conservative')},
         {"name": "trend_following", "params": get_strategy_params('trend_following')},
         {"name": "reversal", "params": get_strategy_params('reversal')}
@@ -1614,6 +1619,74 @@ async def trigger_feishu_notification():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/macd/optimization/schedule/configure")
+async def configure_macd_optimization_schedule(request: Request):
+    """配置MACD参数优化定时任务
+
+    Body:
+        enabled: bool 是否启用
+        time: str 优化时间 "HH:MM"
+    """
+    try:
+        from core.data_update_scheduler import get_scheduler
+        scheduler = get_scheduler()
+
+        data = await request.json()
+        enabled = data.get('enabled', False)
+        opt_time = data.get('time', '23:00')
+
+        if not scheduler.set_macd_optimization_time(opt_time):
+            raise HTTPException(status_code=400, detail='无效的时间格式，请使用 HH:MM 格式')
+
+        scheduler.set_macd_optimization_enabled(enabled)
+
+        if not config.update_config({
+            'macd_optimization_schedule': {
+                'enabled': enabled,
+                'time': opt_time,
+                'lookback_days': 365
+            }
+        }):
+            raise HTTPException(status_code=500, detail='保存MACD优化调度配置失败')
+
+        return {
+            'success': True,
+            'message': f'MACD参数优化定时任务已{"启用" if enabled else "禁用"}，执行时间: {opt_time}',
+            'data': scheduler.get_status()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/macd/optimization/schedule/trigger")
+async def trigger_macd_optimization():
+    """立即触发一次MACD参数优化"""
+    try:
+        from core.data_update_scheduler import get_scheduler
+        scheduler = get_scheduler()
+
+        if scheduler.macd_optimization_status['is_running']:
+            return {
+                'success': False,
+                'message': 'MACD参数优化任务正在进行中，请稍后再试'
+            }
+
+        if scheduler.trigger_macd_optimization_now():
+            return {
+                'success': True,
+                'message': '已启动MACD参数优化任务'
+            }
+        else:
+            return {
+                'success': False,
+                'message': '启动失败'
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/data-update/trigger")
 async def trigger_data_update(background_tasks: BackgroundTasks):
     """手动触发数据更新（独立API，不依赖调度器）
@@ -1624,8 +1697,6 @@ async def trigger_data_update(background_tasks: BackgroundTasks):
         try:
             from scripts.auto_update_data import run_auto_update
             run_auto_update(force=False)
-            from core.position_manager import run_auto_sync_all
-            run_auto_sync_all()
         except Exception as e:
             logger = logging.getLogger(__name__)
             logger.error(f"数据更新失败: {e}")

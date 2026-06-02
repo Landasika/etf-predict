@@ -1,0 +1,24 @@
+{
+  "etf_code": "159770.SZ",
+  "optimization_date": "2026-06-01T18:44:25.910046",
+  "params": {
+    "macd_fast": 8,
+    "macd_slow": 36,
+    "macd_signal": 8,
+    "deadzone": 0.0013740290128113689,
+    "confirm_days": 4,
+    "smooth": 1,
+    "max_change": 4
+  },
+  "metrics": {
+    "total_return_pct": 28.793669499999986,
+    "buy_hold_return_pct": 42.25888324873096,
+    "sharpe_ratio": 2.062561486702136,
+    "win_rate_pct": 50.877192982456144,
+    "max_drawdown_pct": -7.158002669221091,
+    "total_trades": 120,
+    "stop_loss_count": 1,
+    "take_profit_count": 5
+  },
+  "evaluations": 1155
+}

@@ -69,9 +69,25 @@ class DataUpdateScheduler:
             'fail_count': 0
         }
 
+        # MACD参数优化定时任务配置
+        self.macd_optimization_enabled = False
+        self.macd_optimization_time = config.DEFAULT_MACD_OPTIMIZATION_TIME
+        self.macd_optimization_status = {
+            'is_running': False,
+            'last_run': None,
+            'last_result': None,
+            'success_count': 0,
+            'fail_count': 0,
+            'total_etfs': 0,
+            'current_etf': '',
+            'completed_etfs': 0,
+            'failed_etfs': 0,
+            'message': ''
+        }
+
     def _has_enabled_schedules(self) -> bool:
         """是否至少启用了一个定时任务"""
-        return self.enabled or self.feishu_notification_enabled
+        return self.enabled or self.feishu_notification_enabled or self.macd_optimization_enabled
 
     def _sync_scheduler_state(self):
         """根据当前开关状态启动、停止或重载调度器"""
@@ -112,6 +128,13 @@ class DataUpdateScheduler:
         self.set_enabled(bool(update_schedule.get('enabled', False)))
         self.set_feishu_notification_enabled(bool(feishu_schedule.get('enabled', False)))
 
+        # MACD参数优化配置
+        macd_opt_schedule = config_data.get('macd_optimization_schedule', {})
+        opt_time = macd_opt_schedule.get('time', config.DEFAULT_MACD_OPTIMIZATION_TIME)
+        if not self.set_macd_optimization_time(opt_time):
+            self.set_macd_optimization_time(config.DEFAULT_MACD_OPTIMIZATION_TIME)
+        self.set_macd_optimization_enabled(bool(macd_opt_schedule.get('enabled', False)))
+
         # 实时更新器配置
         realtime_enabled = bool(realtime_schedule.get('enabled', False))
         if realtime_enabled:
@@ -122,10 +145,11 @@ class DataUpdateScheduler:
             self.set_realtime_enabled(True)
 
         logger.info(
-            "✅ 调度器配置已恢复: 数据更新=%s, 飞书定时=%s, 实时更新=%s",
+            "✅ 调度器配置已恢复: 数据更新=%s, 飞书定时=%s, 实时更新=%s, MACD优化=%s",
             self.enabled,
             self.feishu_notification_enabled,
-            self.realtime_enabled
+            self.realtime_enabled,
+            self.macd_optimization_enabled
         )
 
     def set_realtime_enabled(self, enabled: bool):
@@ -228,6 +252,36 @@ class DataUpdateScheduler:
         logger.info(f"飞书消息定时发送已{'启用' if enabled else '禁用'}")
         self._sync_scheduler_state()
 
+    def set_macd_optimization_time(self, time_str: str) -> bool:
+        """设置MACD参数优化时间
+
+        Args:
+            time_str: 时间格式 "HH:MM"，如 "23:00"
+
+        Returns:
+            bool: 是否设置成功
+        """
+        try:
+            datetime.strptime(time_str, '%H:%M')
+            self.macd_optimization_time = time_str
+            logger.info(f"MACD参数优化时间已设置为: {time_str}")
+            if self.is_running:
+                self._reschedule()
+            return True
+        except ValueError:
+            logger.error(f"无效的时间格式: {time_str}")
+            return False
+
+    def set_macd_optimization_enabled(self, enabled: bool):
+        """启用/禁用MACD参数优化定时任务
+
+        Args:
+            enabled: True启用，False禁用
+        """
+        self.macd_optimization_enabled = enabled
+        logger.info(f"MACD参数优化定时任务已{'启用' if enabled else '禁用'}")
+        self._sync_scheduler_state()
+
     def _send_feishu_notification(self):
         """发送飞书消息任务"""
         logger.info("=" * 60)
@@ -270,6 +324,85 @@ class DataUpdateScheduler:
             self.feishu_notification_status['fail_count'] += 1
         finally:
             self.feishu_notification_status['is_sending'] = False
+
+    def _run_macd_optimization(self):
+        """执行MACD参数优化任务（遍历所有MACD激进策略ETF）"""
+        logger.info("=" * 60)
+        logger.info("🔧 开始执行MACD参数优化任务")
+        logger.info("=" * 60)
+
+        self.macd_optimization_status['is_running'] = True
+        self.macd_optimization_status['message'] = '正在优化MACD参数...'
+        self.macd_optimization_status['completed_etfs'] = 0
+        self.macd_optimization_status['failed_etfs'] = 0
+
+        try:
+            from strategies.macd_param_optimizer import MACDParamOptimizer
+            from core.watchlist import load_watchlist, save_watchlist
+
+            watchlist = load_watchlist()
+            macd_etfs = [
+                etf for etf in watchlist.get('etfs', [])
+                if etf.get('strategy') == 'macd_aggressive'
+            ]
+
+            if not macd_etfs:
+                logger.warning("⚠️  没有使用MACD激进策略的ETF，跳过优化")
+                self.macd_optimization_status['message'] = '无MACD激进策略ETF'
+                self.macd_optimization_status['last_result'] = '跳过（无目标ETF）'
+                return
+
+            self.macd_optimization_status['total_etfs'] = len(macd_etfs)
+            logger.info(f"找到 {len(macd_etfs)} 个MACD激进策略ETF")
+
+            for etf in macd_etfs:
+                etf_code = etf['code']
+                etf_name = etf.get('name', etf_code)
+                self.macd_optimization_status['current_etf'] = f"{etf_name} ({etf_code})"
+
+                try:
+                    logger.info(f"正在优化 {etf_name} ({etf_code})...")
+                    optimizer = MACDParamOptimizer(etf_code, lookback_days=365)
+                    result = optimizer.optimize()
+
+                    best_params = result['best_params']
+                    metrics = result['metrics']
+
+                    # 保存优化结果到watchlist
+                    etf['optimized_macd_params'] = {
+                        'macd_fast': best_params['macd_fast'],
+                        'macd_slow': best_params['macd_slow'],
+                        'macd_signal': best_params['macd_signal']
+                    }
+                    save_watchlist(watchlist)
+
+                    self.macd_optimization_status['completed_etfs'] += 1
+                    self.macd_optimization_status['success_count'] += 1
+                    logger.info(
+                        "✅ %s (%s): Fast=%d Slow=%d Signal=%d, 收益率=%.2f%%",
+                        etf_name, etf_code,
+                        best_params['macd_fast'], best_params['macd_slow'],
+                        best_params['macd_signal'], metrics['total_return_pct']
+                    )
+                except Exception as e:
+                    self.macd_optimization_status['failed_etfs'] += 1
+                    self.macd_optimization_status['fail_count'] += 1
+                    logger.error(f"❌ {etf_name} ({etf_code}) 优化失败: {e}")
+
+            self.macd_optimization_status['last_run'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.macd_optimization_status['last_result'] = (
+                f"成功: {self.macd_optimization_status['completed_etfs']}/"
+                f"{self.macd_optimization_status['total_etfs']}"
+            )
+            self.macd_optimization_status['message'] = '优化完成'
+            logger.info("✅ MACD参数优化任务完成: %s", self.macd_optimization_status['last_result'])
+
+        except Exception as e:
+            logger.error(f"❌ MACD参数优化任务失败: {e}")
+            self.macd_optimization_status['last_result'] = f'失败: {str(e)}'
+            self.macd_optimization_status['message'] = f'优化失败: {str(e)}'
+        finally:
+            self.macd_optimization_status['is_running'] = False
 
     def set_update_time(self, time_str):
         """设置更新时间
@@ -328,7 +461,7 @@ class DataUpdateScheduler:
             try:
                 from core.position_manager import run_auto_sync_all
                 sync_result = run_auto_sync_all()
-                logger.info(f"📊 持仓同步: {sync_result['trades']}笔交易, {sync_result['locked']}个锁定")
+                logger.info(f"📊 持仓同步: {sync_result['trades']}笔交易, {sync_result['locked']}个锁定, {sync_result.get('skipped', 0)}个跳过")
             except Exception as e:
                 logger.error(f"持仓同步失败: {e}")
 
@@ -365,6 +498,16 @@ class DataUpdateScheduler:
                 schedule.every().friday.at(time_str).do(self._send_feishu_notification)
 
             logger.info(f"✅ 已调度飞书消息任务: 每个工作日 {', '.join(self.feishu_notification_times)}")
+
+        # 如果启用MACD参数优化，添加优化任务
+        if self.macd_optimization_enabled:
+            schedule.every().monday.at(self.macd_optimization_time).do(self._run_macd_optimization)
+            schedule.every().tuesday.at(self.macd_optimization_time).do(self._run_macd_optimization)
+            schedule.every().wednesday.at(self.macd_optimization_time).do(self._run_macd_optimization)
+            schedule.every().thursday.at(self.macd_optimization_time).do(self._run_macd_optimization)
+            schedule.every().friday.at(self.macd_optimization_time).do(self._run_macd_optimization)
+
+            logger.info(f"✅ 已调度MACD参数优化任务: 每个工作日 {self.macd_optimization_time}")
 
     def _run_scheduler(self):
         """调度器运行循环"""
@@ -442,8 +585,29 @@ class DataUpdateScheduler:
                 'enabled': self.feishu_notification_enabled,
                 'times': self.feishu_notification_times.copy(),
                 'status': self.feishu_notification_status.copy()
+            },
+            'macd_optimization': {
+                'enabled': self.macd_optimization_enabled,
+                'time': self.macd_optimization_time,
+                'status': self.macd_optimization_status.copy()
             }
         }
+
+    def trigger_macd_optimization_now(self):
+        """立即触发一次MACD参数优化（在新线程中执行）"""
+        if self.macd_optimization_status['is_running']:
+            logger.warning("⚠️  MACD参数优化任务正在进行中")
+            return False
+
+        logger.info("🔧 手动触发MACD参数优化任务")
+
+        def run_in_thread():
+            self._run_macd_optimization()
+
+        thread = threading.Thread(target=run_in_thread, daemon=True)
+        thread.start()
+
+        return True
 
 
 # 全局调度器实例

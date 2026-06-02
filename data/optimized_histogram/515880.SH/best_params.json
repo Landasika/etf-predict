@@ -1,0 +1,24 @@
+{
+  "etf_code": "515880.SH",
+  "optimization_date": "2026-06-01T18:43:54.314084",
+  "params": {
+    "macd_fast": 5,
+    "macd_slow": 22,
+    "macd_signal": 9,
+    "deadzone": 0.01798252856935601,
+    "confirm_days": 5,
+    "smooth": 2,
+    "max_change": 8
+  },
+  "metrics": {
+    "total_return_pct": 94.77064974999989,
+    "buy_hold_return_pct": 16.06060606060606,
+    "sharpe_ratio": 2.790731137594922,
+    "win_rate_pct": 65.55555555555556,
+    "max_drawdown_pct": -7.931772785622335,
+    "total_trades": 184,
+    "stop_loss_count": 6,
+    "take_profit_count": 28
+  },
+  "evaluations": 1155
+}

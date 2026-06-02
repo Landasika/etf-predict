@@ -70,7 +70,10 @@ class MACDSignalGenerator:
             # 新增：波动率过滤（默认关闭）
             'volatility_filter': False,
             'low_vol_threshold': 0.015,
-            'high_vol_threshold': 0.04
+            'high_vol_threshold': 0.04,
+
+            # MACD柱量能衰竭提前入场（默认关闭，0=关闭，0.5=缩到一半触发）
+            'entry_ratio': 0,
         }
 
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -119,6 +122,7 @@ class MACDSignalGenerator:
         df = self._zero_axis_signals(df)
         df = self._special_patterns(df)
         df = self._divergence_signals(df)
+        df = self._histogram_exhaustion_signals(df)
         df = self._crossover_signals(df)
         df = self._ma60_filter_signals(df)
 
@@ -211,6 +215,74 @@ class MACDSignalGenerator:
         df.loc[below_death, 'signal_strength'] = -8
         df.loc[below_death, 'signal_reason'] = '零轴下方死叉(加速下跌)'
 
+        return df
+
+    def _histogram_exhaustion_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        """MACD柱量能衰竭提前入场信号
+
+        跟踪柱状图峰值，当柱缩到峰值的 entry_ratio 时提前入场：
+        - 负值柱（空头）缩到最深点的 entry_ratio → 空头衰竭 → 提前买入
+        - 正值柱（多头）缩到最高点的 entry_ratio → 多头衰竭 → 提前卖出
+        """
+        entry_ratio = self.params.get('entry_ratio', 0.5)
+        if entry_ratio <= 0:
+            return df
+
+        hist = df['macd_hist'].values
+        n = len(hist)
+        hist_ratio = np.zeros(n)
+        current_peak = 0.0
+        prev_hist = hist[0] if n > 0 else 0
+
+        # Track peak since last histogram sign change
+        for i in range(n):
+            h = hist[i]
+            sign_changed = (h > 0 and prev_hist <= 0) or (h < 0 and prev_hist >= 0)
+            if sign_changed:
+                current_peak = abs(h)
+            elif abs(h) > current_peak:
+                current_peak = abs(h)
+
+            if current_peak > 0:
+                hist_ratio[i] = abs(h) / current_peak
+            prev_hist = h
+
+        df = df.copy()
+        df['_hist_ratio'] = hist_ratio
+
+        # Only generate early signals where no stronger signal exists
+        no_signal = df['signal_type'] == 'HOLD'
+
+        # Early buy: bearish histogram exhausted (negative hist, ratio crossing below threshold)
+        early_buy = (
+            (hist < 0) &
+            (hist_ratio <= entry_ratio) &
+            (np.roll(hist_ratio, 1) > entry_ratio) &
+            no_signal
+        )
+        # First bar shouldn't trigger (np.roll wraps around)
+        if n > 1:
+            early_buy[0] = False
+
+        df.loc[early_buy, 'signal_type'] = 'BUY'
+        df.loc[early_buy, 'signal_strength'] = 2
+        df.loc[early_buy, 'signal_reason'] = '柱量能衰竭(预判金叉)'
+
+        # Early sell: bullish histogram exhausted (positive hist, ratio crossing below threshold)
+        early_sell = (
+            (hist > 0) &
+            (hist_ratio <= entry_ratio) &
+            (np.roll(hist_ratio, 1) > entry_ratio) &
+            no_signal
+        )
+        if n > 1:
+            early_sell[0] = False
+
+        df.loc[early_sell, 'signal_type'] = 'SELL'
+        df.loc[early_sell, 'signal_strength'] = -1
+        df.loc[early_sell, 'signal_reason'] = '柱量能衰竭(预判死叉)'
+
+        df.drop(columns=['_hist_ratio'], inplace=True)
         return df
 
     def _crossover_signals(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -455,11 +527,59 @@ def get_latest_signal_optimized(etf_code: str, strategy_type: str, strategy_para
     # 4. 根据策略类型生成信号（仅支持MACD激进策略）
     macd_dif = float(latest.get('macd_dif', 0))
     macd_dea = float(latest.get('macd_dea', 0))
+    macd_hist = float(latest.get('macd_hist', 0))
     kdj_k = float(latest.get('kdj_k', 0))
     kdj_d = float(latest.get('kdj_d', 0))
 
-    # 仅支持MACD激进策略
-    signal = 'buy' if macd_dif > macd_dea else ('sell' if macd_dif < macd_dea else 'hold')
+    # 柱量能衰竭检测
+    entry_ratio = strategy_params.get('entry_ratio', 0)
+    hist_exhaustion_signal = ''
+    hist_exhaustion_reason = ''
+
+    if entry_ratio > 0 and len(df_with_indicators) >= 2:
+        hist_values = df_with_indicators['macd_hist'].values
+        n = len(hist_values)
+        hist_ratio = np.zeros(n)
+        current_peak = 0.0
+        prev_hist = hist_values[0]
+
+        for i in range(n):
+            h = hist_values[i]
+            sign_changed = (h > 0 and prev_hist <= 0) or (h < 0 and prev_hist >= 0)
+            if sign_changed:
+                current_peak = abs(h)
+            elif abs(h) > current_peak:
+                current_peak = abs(h)
+            if current_peak > 0:
+                hist_ratio[i] = abs(h) / current_peak
+            prev_hist = h
+
+        # 检查最新两天是否触发柱衰竭信号
+        latest_ratio = hist_ratio[-1]
+        prev_ratio = hist_ratio[-2]
+        latest_hist = hist_values[-1]
+
+        if latest_ratio <= entry_ratio and prev_ratio > entry_ratio:
+            if latest_hist < 0:
+                hist_exhaustion_signal = 'buy'
+                hist_exhaustion_reason = '柱量能衰竭(预判金叉)'
+            elif latest_hist > 0:
+                hist_exhaustion_signal = 'sell'
+                hist_exhaustion_reason = '柱量能衰竭(预判死叉)'
+
+    # 确定最终信号：柱衰竭信号优先于简单的DIF/DEA比较
+    if hist_exhaustion_signal:
+        signal = hist_exhaustion_signal
+        signal_reason = hist_exhaustion_reason
+    elif macd_dif > macd_dea:
+        signal = 'buy'
+        signal_reason = 'MACD金叉区域'
+    elif macd_dif < macd_dea:
+        signal = 'sell'
+        signal_reason = 'MACD死叉区域'
+    else:
+        signal = 'hold'
+        signal_reason = 'MACD粘合'
 
     return {
         'signal': signal,
@@ -468,8 +588,9 @@ def get_latest_signal_optimized(etf_code: str, strategy_type: str, strategy_para
         'close': float(latest['close']),
         'macd_dif': macd_dif,
         'macd_dea': macd_dea,
-        'macd_hist': float(latest.get('macd_hist', 0)),
+        'macd_hist': macd_hist,
         'kdj_k': kdj_k,
         'kdj_d': kdj_d,
-        'kdj_j': float(latest.get('kdj_j', 0))
+        'kdj_j': float(latest.get('kdj_j', 0)),
+        'signal_reason': signal_reason
     }

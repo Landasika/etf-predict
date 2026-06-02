@@ -1,0 +1,24 @@
+{
+  "etf_code": "562360.SH",
+  "optimization_date": "2026-06-01T19:00:54.947246",
+  "params": {
+    "macd_fast": 7,
+    "macd_slow": 40,
+    "macd_signal": 9,
+    "deadzone": 0.009301519131516178,
+    "confirm_days": 4,
+    "smooth": 1,
+    "max_change": 6
+  },
+  "metrics": {
+    "total_return_pct": 36.92966074999995,
+    "buy_hold_return_pct": 43.71980676328502,
+    "sharpe_ratio": 1.978926608258523,
+    "win_rate_pct": 50.0,
+    "max_drawdown_pct": -7.282438228958522,
+    "total_trades": 146,
+    "stop_loss_count": 4,
+    "take_profit_count": 8
+  },
+  "evaluations": 1155
+}

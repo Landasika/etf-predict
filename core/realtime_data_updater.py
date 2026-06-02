@@ -417,6 +417,11 @@ class RealtimeDataUpdater:
         import sqlite3
         import config
 
+        close_price = float(data_row['close'])
+        if close_price <= 0:
+            logger.warning(f"  ⚠️ {data_row['ts_code']}: 价格异常 close={close_price}，跳过写入")
+            return
+
         conn = sqlite3.connect(config.DATABASE_PATH)
         cursor = conn.cursor()
 
@@ -440,7 +445,7 @@ class RealtimeDataUpdater:
                 float(data_row['open']),
                 float(data_row['high']),
                 float(data_row['low']),
-                float(data_row['close']),
+                close_price,
                 vol_lots,       # 已转换为"手"
                 amount_thousand  # 已转换为"千元"
             ))
