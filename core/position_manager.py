@@ -101,7 +101,8 @@ def upsert_position(etf_code: str, current_positions: int, avg_cost: float = 0,
 def auto_sync_signal(etf_code: str, target_position: int, strategy: str = None,
                      price: float = 0, data_date: str = '') -> dict:
     """Compare signal target_position with DB position.
-    Only auto-trade when data_date is newer than last lock date (new data).
+    Only record real trades AFTER market close (after 15:00), and only once per day.
+    During trading hours (9:30-15:00), signals are only suggestions, not recorded as trades.
     Same data_date = recalculation, skip (strategy changed after close).
     """
     pos = get_position(etf_code)
@@ -112,10 +113,27 @@ def auto_sync_signal(etf_code: str, target_position: int, strategy: str = None,
     if target_position == current:
         return {'action': 'HOLD', 'delta': 0}
 
-    # Same data date = recalculating old data, don't auto-trade
+    now = datetime.now()
+
+    # 周末不交易
+    if now.weekday() >= 5:
+        return {'action': 'SKIPPED', 'delta': abs(target_position - current),
+                'from': current, 'to': target_position,
+                'reason': '周末，跳过自动同步'}
+
+    # 盘中时段（9:30-15:00）：只显示信号，不记录交易
+    is_trading_hours = (9 <= now.hour < 15) or (now.hour == 15 and now.minute == 0)
+    if is_trading_hours:
+        return {'action': 'SKIPPED', 'delta': abs(target_position - current),
+                'from': current, 'to': target_position,
+                'reason': '盘中时段，仅显示信号建议，不记录交易（收盘后才记录）'}
+
+    # Same data date = 今天已经记录过交易了（盘后更新策略时不重复记录）
     if locked_date == today:
         return {'action': 'LOCKED', 'delta': abs(target_position - current),
                 'from': current, 'to': target_position}
+
+    # 收盘后（15:00之后）且今天还没记录过：记录交易
 
     action = 'BUY' if target_position > current else 'SELL'
     delta = abs(target_position - current)
@@ -185,11 +203,13 @@ def run_auto_sync_all(start_date: str = '20250101'):
 
     trades = [r for r in results if r.get('action') in ('BUY', 'SELL')]
     locked = [r for r in results if r.get('action') == 'LOCKED']
+    skipped = [r for r in results if r.get('action') == 'SKIPPED']
     return {
         'success': True,
         'total': len(results),
         'trades': len(trades),
         'locked': len(locked),
+        'skipped': len(skipped),
         'details': results,
     }
 
