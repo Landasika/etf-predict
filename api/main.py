@@ -1323,14 +1323,8 @@ async def get_token_status():
 async def get_scheduler_status():
     """获取调度器状态"""
     try:
-        from core.data_update_scheduler import get_scheduler
-        scheduler = get_scheduler()
-        status = scheduler.get_status()
-
-        return {
-            'success': True,
-            'data': status
-        }
+        from core.scheduler_settings_service import get_scheduler_settings_status
+        return get_scheduler_settings_status()
     except Exception as e:
         # 返回默认状态而不是错误
         return {
@@ -1358,33 +1352,16 @@ async def configure_scheduler(request: Request):
         update_time: str 更新时间 "HH:MM"
     """
     try:
-        from core.data_update_scheduler import get_scheduler
-        scheduler = get_scheduler()
-
         data = await request.json()
         enabled = data.get('enabled', False)
         update_time = data.get('update_time', '15:05')
 
-        # 设置更新时间
-        if not scheduler.set_update_time(update_time):
-            raise HTTPException(status_code=400, detail='无效的时间格式，请使用 HH:MM 格式')
-
-        # 启用/禁用调度器
-        scheduler.set_enabled(enabled)
-
-        if not config.update_config({
-            'update_schedule': {
-                'enabled': enabled,
-                'time': update_time
-            }
-        }):
-            raise HTTPException(status_code=500, detail='保存调度器配置失败')
-
-        return {
-            'success': True,
-            'message': f'调度器已{"启用" if enabled else "禁用"}，更新时间: {update_time}',
-            'data': scheduler.get_status()
-        }
+        from core.scheduler_settings_service import configure_data_update_schedule
+        return configure_data_update_schedule(enabled, update_time)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -1427,33 +1404,16 @@ async def configure_feishu_notification(request: Request):
         times: list 发送时间列表 ["HH:MM", "HH:MM", ...]
     """
     try:
-        from core.data_update_scheduler import get_scheduler
-        scheduler = get_scheduler()
-
         data = await request.json()
         enabled = data.get('enabled', False)
         times = data.get('times', ["09:40", "10:40", "11:40", "13:40", "14:40"])
 
-        # 设置飞书消息发送时间
-        if not scheduler.set_feishu_notification_times(times):
-            raise HTTPException(status_code=400, detail='无效的时间格式，请使用 HH:MM 格式')
-
-        # 启用/禁用飞书消息发送
-        scheduler.set_feishu_notification_enabled(enabled)
-
-        if not config.update_config({
-            'feishu_notification_schedule': {
-                'enabled': enabled,
-                'times': ','.join(scheduler.feishu_notification_times)
-            }
-        }):
-            raise HTTPException(status_code=500, detail='保存飞书定时发送配置失败')
-
-        return {
-            'success': True,
-            'message': '飞书消息定时发送配置已更新',
-            'data': scheduler.get_status()
-        }
+        from core.scheduler_settings_service import configure_feishu_notification_schedule
+        return configure_feishu_notification_schedule(enabled, times)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -1496,35 +1456,17 @@ async def configure_macd_optimization_schedule(request: Request):
         notify_feishu: bool 优化完成后是否发送飞书操作建议
     """
     try:
-        from core.data_update_scheduler import get_scheduler
-        scheduler = get_scheduler()
-
         data = await request.json()
         enabled = data.get('enabled', False)
         opt_time = data.get('time', '23:00')
         notify_feishu = data.get('notify_feishu', False)
 
-        if not scheduler.set_macd_optimization_time(opt_time):
-            raise HTTPException(status_code=400, detail='无效的时间格式，请使用 HH:MM 格式')
-
-        scheduler.set_macd_optimization_enabled(enabled)
-        scheduler.set_macd_optimization_notify_feishu(bool(notify_feishu))
-
-        if not config.update_config({
-            'macd_optimization_schedule': {
-                'enabled': enabled,
-                'time': opt_time,
-                'lookback_days': 365,
-                'notify_feishu': bool(notify_feishu)
-            }
-        }):
-            raise HTTPException(status_code=500, detail='保存MACD优化调度配置失败')
-
-        return {
-            'success': True,
-            'message': f'MACD参数优化定时任务已{"启用" if enabled else "禁用"}，执行时间: {opt_time}',
-            'data': scheduler.get_status()
-        }
+        from core.scheduler_settings_service import configure_macd_optimization_schedule
+        return configure_macd_optimization_schedule(enabled, opt_time, notify_feishu)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
