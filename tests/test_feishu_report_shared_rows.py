@@ -1,3 +1,6 @@
+import pytest
+
+
 def test_load_data_uses_shared_feishu_rows_without_recomputing_signals(monkeypatch):
     from core import feishu_report, watchlist
 
@@ -93,6 +96,64 @@ def test_load_data_does_not_fallback_to_database_when_shared_rows_raise(monkeypa
         raise AssertionError("Unexpected shared row errors must not use DB fallback")
 
     monkeypatch.setattr(feishu_report, "build_feishu_operation_rows", raise_shared_row_error)
+    monkeypatch.setattr(feishu_report, "get_etf_connection", fail_if_database_fallback)
+
+    report = feishu_report.ETFOperationReport()
+
+    assert report.load_data() is False
+    assert report.etf_data == {}
+
+
+@pytest.mark.parametrize(
+    "shared_result",
+    [
+        {
+            "data": [
+                {
+                    "code": "562360.SH",
+                    "name": "ETF A Shared",
+                }
+            ]
+        },
+        {
+            "success": None,
+            "data": [
+                {
+                    "code": "562360.SH",
+                    "name": "ETF A Shared",
+                }
+            ],
+        },
+    ],
+)
+def test_load_data_does_not_fallback_to_database_when_shared_payload_metadata_is_malformed(
+    monkeypatch, shared_result
+):
+    from core import feishu_report
+
+    monkeypatch.setattr(
+        feishu_report,
+        "load_watchlist",
+        lambda: {
+            "etfs": [
+                {
+                    "code": "562360.SH",
+                    "name": "ETF A",
+                    "sector": "Tech",
+                    "total_positions": 10,
+                }
+            ]
+        },
+    )
+
+    def fail_if_database_fallback():
+        raise AssertionError("Malformed shared row metadata must not use DB fallback")
+
+    monkeypatch.setattr(
+        feishu_report,
+        "build_feishu_operation_rows",
+        lambda: shared_result,
+    )
     monkeypatch.setattr(feishu_report, "get_etf_connection", fail_if_database_fallback)
 
     report = feishu_report.ETFOperationReport()
