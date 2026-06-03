@@ -104,22 +104,54 @@ def _get_macd_params_display(etf: dict) -> dict:
     }
 
 
+def _safe_int(value, default: int = 0) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value, default: float = 0.0) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return default
+
+
+def _apply_actual_position_fields(row: dict, db_position: dict, data_date: str) -> None:
+    actual_positions = _safe_int(db_position.get('current_positions', 0))
+    target_positions = _safe_int(row.get('positions_used', 0))
+    today_action = target_positions - actual_positions
+    daily_change_pct = _safe_float(row.get('daily_change_pct', 0))
+    row_date = row.get('data_date') or data_date
+
+    row['db_position'] = actual_positions
+    row['db_shares'] = db_position.get('total_shares', 0)
+    row['db_avg_cost'] = db_position.get('avg_cost', 0)
+    row['previous_positions_used'] = actual_positions
+    row['today_action_count'] = today_action
+    row['today_operation'] = _get_today_operation(today_action)
+    row['action_reason'] = _get_action_reason(
+        today_action,
+        row.get('latest_data', {}),
+        target_positions,
+    )
+    row['daily_profit'] = calculate_daily_profit(actual_positions, daily_change_pct)
+    row['monthly_profit'] = calculate_monthly_profit(
+        row.get('code', ''),
+        row_date,
+        actual_positions,
+    )
+    row['slot_value'] = SLOT_VALUE
+
+
 def _cached_batch_signals_response(cached: dict, data_date: str) -> dict:
     db_positions = {p['etf_code']: p for p in position_manager.get_all_positions()}
     rows = []
     for cached_row in cached.get('data', []):
         row = dict(cached_row)
         db = db_positions.get(row.get('code', ''), {})
-        row['db_position'] = db.get('current_positions', 0)
-        row['db_shares'] = db.get('total_shares', 0)
-        row['db_avg_cost'] = db.get('avg_cost', 0)
-        row.setdefault('slot_value', SLOT_VALUE)
-        if 'monthly_profit' not in row:
-            row['monthly_profit'] = calculate_monthly_profit(
-                row.get('code', ''),
-                row.get('data_date') or data_date,
-                row['db_position'],
-            )
+        _apply_actual_position_fields(row, db, data_date)
         rows.append(row)
     return {
         'success': True,
@@ -196,9 +228,7 @@ def _merge_db_positions(rows: list[dict]) -> None:
     db_positions = {p['etf_code']: p for p in position_manager.get_all_positions()}
     for row in rows:
         db = db_positions.get(row['code'], {})
-        row['db_position'] = db.get('current_positions', 0)
-        row['db_shares'] = db.get('total_shares', 0)
-        row['db_avg_cost'] = db.get('avg_cost', 0)
+        _apply_actual_position_fields(row, db, row.get('data_date', ''))
 
 
 def build_position_signal_rows(
@@ -288,6 +318,7 @@ def build_position_signal_rows(
             'profit_pct': signal_data.get('profit_pct', 0),
             'benchmark_return': backtest_summary.get('buy_hold_return_pct', 0) or 0,
             'positions_used': signal_data.get('positions_used', 0),
+            'previous_positions_used': previous_positions,
             'total_positions': etf.get('total_positions', 10),
             'next_action': signal_data.get('next_action', '--'),
             'macd': {
@@ -339,7 +370,7 @@ def build_feishu_operation_rows() -> dict:
             'name': row.get('name', row.get('code', '')),
             'close': row.get('price', 0),
             'pct_chg': row.get('daily_change_pct', 0),
-            'previous_positions_used': row.get('db_position', 0),
+            'previous_positions_used': row.get('previous_positions_used', row.get('db_position', 0)),
             'positions_used': row.get('positions_used', 0),
             'daily_profit': row.get('daily_profit', 0),
             'monthly_profit': row.get('monthly_profit', 0),

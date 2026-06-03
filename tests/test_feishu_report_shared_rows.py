@@ -235,7 +235,7 @@ def test_load_data_falls_back_to_database_when_shared_success_is_false(monkeypat
 
 
 @pytest.mark.parametrize("shared_data", [[], None])
-def test_load_data_falls_back_to_database_when_shared_success_is_true_without_data(
+def test_load_data_does_not_fallback_when_shared_success_is_true_without_data(
     monkeypatch, shared_data
 ):
     from core import feishu_report
@@ -246,14 +246,13 @@ def test_load_data_falls_back_to_database_when_shared_success_is_true_without_da
         "build_feishu_operation_rows",
         lambda: {"success": True, "data": shared_data},
     )
-    monkeypatch.setattr(
-        feishu_report,
-        "get_etf_connection",
-        lambda: _FakeConnection((1.234, 2.5, "20260603", "ETF A DB [4仓]")),
-    )
+
+    def fail_if_database_fallback():
+        raise AssertionError("Successful shared row payloads must not use DB fallback")
+
+    monkeypatch.setattr(feishu_report, "get_etf_connection", fail_if_database_fallback)
 
     report = feishu_report.ETFOperationReport()
 
-    assert report.load_data() is True
-    assert report.etf_data["562360.SH"]["name"] == "ETF A DB"
-    assert report.etf_data["562360.SH"]["previous_positions_used"] == 4
+    assert report.load_data() is False
+    assert report.etf_data == {}

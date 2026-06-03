@@ -46,7 +46,10 @@ class ETFOperationReport:
             print(f"❌ 共享信号数据success字段无效: {shared_success!r}")
             return False
 
-        if shared_success is True and shared_data:
+        if shared_success is True:
+            if not isinstance(shared_data, list) or not shared_data:
+                print("❌ 共享信号数据为空或格式无效")
+                return False
             try:
                 self.etf_data = {}
                 for row in shared_data:
@@ -78,9 +81,6 @@ class ETFOperationReport:
                 import traceback
                 traceback.print_exc()
                 return False
-
-        if shared_success is True:
-            print("⚠️ 共享信号数据为空，使用数据库数据")
 
         # 如果共享信号数据不可用，使用数据库数据（fallback）
         # 获取ETF数据

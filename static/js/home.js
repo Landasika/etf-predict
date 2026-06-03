@@ -1585,7 +1585,9 @@ async function loadAdvice() {
             profit_pct: etf.profit_pct,
             action_reason: etf.action_reason || '',  // 添加操作原因
             today_action_count: etf.today_action_count || 0,
-            previous_positions_used: etf.latest_data?.previous_positions_used || 0
+            today_operation: etf.today_operation || '',
+            db_position: etf.db_position ?? 0,
+            previous_positions_used: etf.previous_positions_used ?? etf.db_position ?? 0
         }));
 
         const buySignals = formattedSignals.filter(s => s.today_action_count > 0);

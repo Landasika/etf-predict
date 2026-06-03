@@ -140,6 +140,14 @@ def test_position_grid_delta_uses_strategy_slots_not_today_action_count():
     assert "today_action_count" not in body
 
 
+def test_advice_modal_uses_backend_actual_positions_not_strategy_previous_slots():
+    source = HOME_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "loadAdvice")
+
+    assert "previous_positions_used: etf.previous_positions_used ?? etf.db_position ?? 0" in body
+    assert "previous_positions_used: etf.latest_data?.previous_positions_used || 0" not in body
+
+
 def test_position_grid_sort_prioritizes_add_reduce_then_hold():
     source = HOME_JS.read_text(encoding="utf-8")
     body = _function_body(source, "sortPositionGridItems")

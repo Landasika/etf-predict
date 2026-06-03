@@ -118,6 +118,59 @@ def test_build_position_signal_rows_uses_cache_after_lock_even_when_refresh(monk
     assert result["data"][0]["monthly_profit"] == 9.0
 
 
+def test_build_position_signal_rows_rederives_actual_position_fields_from_cached_rows(monkeypatch):
+    from core import database, position_manager, position_signal_service, watchlist
+
+    cached_row = {
+        "code": "562360.SH",
+        "data_date": "20260603",
+        "positions_used": 5,
+        "daily_change_pct": 5.0,
+        "daily_profit": 30.0,
+        "today_action_count": 2,
+        "today_operation": "买入2仓",
+        "action_reason": "old reason",
+        "latest_data": {
+            "signal_type": "BUY",
+            "signal_strength": 8,
+            "macd_dif": 0.1,
+            "macd_dea": 0.05,
+            "kdj_k": 50,
+        },
+    }
+
+    monkeypatch.setattr(position_signal_service, "_is_after_position_grid_lock_time", lambda now=None: True)
+    monkeypatch.setattr(database, "get_latest_data_date", lambda: "20260603")
+    monkeypatch.setattr(database, "get_batch_cache", lambda cache_type, data_date: {
+        "data": [cached_row],
+        "count": 1,
+    })
+    monkeypatch.setattr(position_manager, "get_all_positions", lambda: [{
+        "etf_code": "562360.SH",
+        "current_positions": 4,
+        "total_shares": 800,
+        "avg_cost": 1.1,
+    }])
+    monkeypatch.setattr(position_signal_service, "calculate_monthly_profit", lambda *args: 9.0)
+
+    def fail_if_recomputed(*args, **kwargs):
+        raise AssertionError("cached signals should not recompute strategy output after lock")
+
+    monkeypatch.setattr(watchlist, "calculate_realtime_signal", fail_if_recomputed)
+
+    result = position_signal_service.build_position_signal_rows(refresh=True)
+
+    row = result["data"][0]
+    assert row["db_position"] == 4
+    assert row["previous_positions_used"] == 4
+    assert row["today_action_count"] == 1
+    assert row["today_operation"] == "买入1仓"
+    assert row["daily_profit"] == pytest.approx(4 * 200 * 5.0 / 100)
+    assert row["monthly_profit"] == 9.0
+    assert row["action_reason"] != "old reason"
+    assert cached_row["today_operation"] == "买入2仓"
+
+
 def test_build_position_signal_rows_copies_cached_rows_before_enriching(monkeypatch):
     from core import database, position_manager, position_signal_service
 
