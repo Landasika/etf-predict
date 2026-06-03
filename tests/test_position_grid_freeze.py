@@ -1,11 +1,12 @@
 import pytest
 
 from api import main as api_main
+from core import position_signal_service
 
 
 @pytest.mark.asyncio
 async def test_batch_signals_refresh_uses_cache_after_close(monkeypatch):
-    monkeypatch.setattr(api_main, "_is_after_position_grid_lock_time", lambda now=None: True)
+    monkeypatch.setattr(position_signal_service, "_is_after_position_grid_lock_time", lambda now=None: True)
 
     from core import database, position_manager, watchlist
 
@@ -19,7 +20,7 @@ async def test_batch_signals_refresh_uses_cache_after_close(monkeypatch):
         },
     )
     monkeypatch.setattr(position_manager, "get_all_positions", lambda: [])
-    monkeypatch.setattr(api_main, "calculate_monthly_profit", lambda *args, **kwargs: 0)
+    monkeypatch.setattr(position_signal_service, "calculate_monthly_profit", lambda *args, **kwargs: 0)
 
     def fail_if_recomputed(*args, **kwargs):
         raise AssertionError("signals should not be recomputed after close")
