@@ -121,23 +121,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // 操作建议按钮
     document.getElementById('showAdviceBtn').addEventListener('click', showAdviceModal);
 
-    // 定时设置按钮
-    document.getElementById('schedulerSettingsBtn').addEventListener('click', showSchedulerSettings);
-
-    // 定时设置弹窗事件
-    document.getElementById('closeSchedulerModalBtn').addEventListener('click', hideSchedulerSettings);
-    document.getElementById('cancelSchedulerSettingsBtn').addEventListener('click', hideSchedulerSettings);
-    document.getElementById('saveSchedulerSettingsBtn').addEventListener('click', saveSchedulerSettings);
-
     // 点击模态框外部关闭
     document.getElementById('addEtfModal').addEventListener('click', function(e) {
         if (e.target === this) {
             hideAddModal();
-        }
-    });
-    document.getElementById('schedulerSettingsModal').addEventListener('click', function(e) {
-        if (e.target === this) {
-            hideSchedulerSettings();
         }
     });
 
@@ -1324,108 +1311,6 @@ function updateSchedulerUI(status) {
     // 检查是否正在更新
     if (status.update_status.is_updating) {
         showDataUpdateProgress(status.update_status);
-    }
-}
-
-// 显示调度器设置弹窗
-function showSchedulerSettings() {
-    const modal = document.getElementById('schedulerSettingsModal');
-    modal.style.display = 'block';
-
-    // 加载当前设置
-    loadSchedulerSettings();
-}
-
-// 隐藏调度器设置弹窗
-function hideSchedulerSettings() {
-    document.getElementById('schedulerSettingsModal').style.display = 'none';
-}
-
-// 加载调度器设置
-async function loadSchedulerSettings() {
-    try {
-        const response = await fetch('/api/data-update/scheduler/status');
-        const result = await response.json();
-
-        if (result.success) {
-            const status = result.data;
-            document.getElementById('schedulerEnabled').checked = status.enabled;
-            document.getElementById('schedulerTime').value = status.update_time;
-
-            // MACD optimization settings
-            const macdOpt = status.macd_optimization;
-            if (macdOpt) {
-                document.getElementById('macdOptimizationEnabled').checked = macdOpt.enabled;
-                document.getElementById('macdOptimizationTime').value = macdOpt.time || '23:00';
-            }
-
-            // 更新当前状态显示
-            const statusSpan = document.getElementById('schedulerCurrentStatus');
-            const nextRunSpan = document.getElementById('schedulerNextRunInfo');
-
-            if (status.enabled) {
-                statusSpan.textContent = `已启用，每天 ${status.update_time} 更新`;
-                if (status.next_run) {
-                    nextRunSpan.textContent = status.next_run;
-                } else {
-                    nextRunSpan.textContent = '--';
-                }
-            } else {
-                statusSpan.textContent = '未启用';
-                nextRunSpan.textContent = '--';
-            }
-        }
-    } catch (error) {
-        console.error('加载设置失败:', error);
-    }
-}
-
-// 保存调度器设置
-async function saveSchedulerSettings() {
-    const enabled = document.getElementById('schedulerEnabled').checked;
-    const updateTime = document.getElementById('schedulerTime').value;
-    const macdOptEnabled = document.getElementById('macdOptimizationEnabled').checked;
-    const macdOptTime = document.getElementById('macdOptimizationTime').value;
-
-    try {
-        // Save data update schedule
-        const updateResponse = await fetch('/api/data-update/scheduler/configure', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                enabled: enabled,
-                update_time: updateTime
-            })
-        });
-
-        const updateResult = await updateResponse.json();
-        if (!updateResult.success) {
-            alert('数据更新定时保存失败: ' + updateResult.message);
-            return;
-        }
-
-        // Save MACD optimization schedule
-        const macdResponse = await fetch('/api/macd/optimization/schedule/configure', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                enabled: macdOptEnabled,
-                time: macdOptTime
-            })
-        });
-
-        const macdResult = await macdResponse.json();
-        if (!macdResult.success) {
-            alert('MACD优化定时保存失败: ' + macdResult.message);
-            return;
-        }
-
-        alert('定时设置保存成功');
-        hideSchedulerSettings();
-        loadSchedulerStatus(); // 刷新状态
-    } catch (error) {
-        console.error('保存设置失败:', error);
-        alert('保存失败: ' + error.message);
     }
 }
 

@@ -1086,18 +1086,6 @@ body {
 
 /* ==================== 调度器相关样式 ==================== */
 
-.btn-scheduler {
-    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
-    color: white;
-    border: none;
-    transition: all 0.3s;
-}
-
-.btn-scheduler:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
-}
-
 /* 调度器状态横幅 */
 .scheduler-status-banner {
     background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
@@ -1184,29 +1172,6 @@ body {
     color: #1e40af;
 }
 
-/* 调度器设置弹窗 */
-.scheduler-modal {
-    max-width: 500px;
-}
-
-.scheduler-modal .form-group {
-    margin-bottom: 20px;
-}
-
-.scheduler-modal label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: 500;
-    color: #374151;
-}
-
-.scheduler-modal input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    margin-right: 8px;
-    cursor: pointer;
-}
-
 .time-input {
     width: 100%;
     padding: 10px 15px;
@@ -1219,25 +1184,6 @@ body {
 .time-input:focus {
     outline: none;
     border-color: #8b5cf6;
-}
-
-.scheduler-current-status,
-.scheduler-next-run-info {
-    padding: 12px;
-    background: #f3f4f6;
-    border-radius: 8px;
-    margin-bottom: 15px;
-    font-size: 14px;
-}
-
-.scheduler-current-status strong,
-.scheduler-next-run-info strong {
-    color: #374151;
-}
-
-.scheduler-current-status span,
-.scheduler-next-run-info span {
-    color: #6b7280;
 }
 
 .modal-actions {

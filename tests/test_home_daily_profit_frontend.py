@@ -75,6 +75,16 @@ def test_homepage_replaces_daily_profit_panel_with_position_grid():
     assert "本月盈亏" in source
 
 
+def test_homepage_does_not_expose_scheduler_settings_controls():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    source = HOME_JS.read_text(encoding="utf-8")
+
+    assert "schedulerSettingsModal" not in html
+    assert "schedulerSettingsBtn" not in html
+    assert "saveSchedulerSettings" not in source
+    assert "/api/macd/optimization/schedule/configure" not in source
+
+
 def test_strategy_overview_tabs_default_to_grid_and_can_switch():
     html = INDEX_HTML.read_text(encoding="utf-8")
     source = HOME_JS.read_text(encoding="utf-8")

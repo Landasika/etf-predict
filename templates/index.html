@@ -58,10 +58,6 @@
                 <button id="optimizeAllBtn" class="btn btn-optimize-all">
                     <span class="btn-icon">⚡</span> 一键优化所有参数
                 </button>
-                <button id="schedulerSettingsBtn" class="btn btn-scheduler">
-                    <span class="btn-icon">⏰</span> 定时设置
-                </button>
-
                 <!-- 实时监控控制 -->
                 <div class="realtime-control">
                     <button id="toggleRealtimeBtn" class="btn btn-realtime">
@@ -211,51 +207,6 @@
                 </div>
                 <div class="progress-log" id="optProgressLog"></div>
             </section>
-
-            <!-- 定时设置弹窗 -->
-            <div id="schedulerSettingsModal" class="modal">
-                <div class="modal-content scheduler-modal">
-                    <div class="modal-header">
-                        <h3>⏰ 定时更新设置</h3>
-                        <button id="closeSchedulerModalBtn" class="close-btn">&times;</button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="schedulerEnabled">
-                                启用定时更新
-                            </label>
-                        </div>
-                        <div class="form-group">
-                            <label for="schedulerTime">更新时间（每个交易日）</label>
-                            <input type="time" id="schedulerTime" class="time-input" value="15:05">
-                        </div>
-                        <div class="scheduler-current-status">
-                            <strong>当前状态：</strong>
-                            <span id="schedulerCurrentStatus">未启用</span>
-                        </div>
-                        <!-- MACD参数优化定时设置 -->
-                        <div class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #dee2e6;">
-                            <label>
-                                <input type="checkbox" id="macdOptimizationEnabled">
-                                启用MACD参数优化（每个交易日夜间）
-                            </label>
-                        </div>
-                        <div class="form-group">
-                            <label for="macdOptimizationTime">优化执行时间</label>
-                            <input type="time" id="macdOptimizationTime" class="time-input" value="23:00">
-                        </div>
-                        <div class="scheduler-next-run-info">
-                            <strong>下次运行：</strong>
-                            <span id="schedulerNextRunInfo">--</span>
-                        </div>
-                        <div class="modal-actions">
-                            <button id="saveSchedulerSettingsBtn" class="btn btn-primary">保存设置</button>
-                            <button id="cancelSchedulerSettingsBtn" class="btn btn-secondary">取消</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <!-- 实时监控设置弹窗 -->
             <div id="realtimeSettingsModal" class="modal">
