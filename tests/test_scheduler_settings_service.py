@@ -78,11 +78,45 @@ def persisted_updates(monkeypatch):
     return updates
 
 
-def test_data_update_schedule_persists_config(fake_scheduler, persisted_updates):
+@pytest.fixture
+def current_config(monkeypatch):
+    data = {
+        "update_schedule": {
+            "enabled": False,
+            "time": "15:05",
+            "retry_limit": 3,
+        },
+        "feishu_notification_schedule": {
+            "enabled": False,
+            "times": "09:40",
+            "future_key": "keep",
+        },
+        "macd_optimization_schedule": {
+            "enabled": False,
+            "time": "23:00",
+            "lookback_days": 180,
+            "notify_feishu": True,
+            "future_key": "keep",
+        },
+    }
+
+    monkeypatch.setattr(scheduler_settings_service.config, "get_config", lambda: data)
+    return data
+
+
+def test_data_update_schedule_persists_config(
+    fake_scheduler, persisted_updates, current_config
+):
     result = scheduler_settings_service.configure_data_update_schedule(True, "16:20")
 
     assert persisted_updates == [
-        {"update_schedule": {"enabled": True, "time": "16:20"}}
+        {
+            "update_schedule": {
+                "enabled": True,
+                "time": "16:20",
+                "retry_limit": 3,
+            }
+        }
     ]
     assert result["success"] is True
     assert result["message"] == "调度器已启用，更新时间: 16:20"
@@ -97,7 +131,7 @@ def test_invalid_data_update_time_raises_value_error(fake_scheduler, persisted_u
 
 
 def test_feishu_notification_schedule_persists_comma_joined_times(
-    fake_scheduler, persisted_updates
+    fake_scheduler, persisted_updates, current_config
 ):
     result = scheduler_settings_service.configure_feishu_notification_schedule(
         True, ["09:35", "14:55"]
@@ -108,6 +142,7 @@ def test_feishu_notification_schedule_persists_comma_joined_times(
             "feishu_notification_schedule": {
                 "enabled": True,
                 "times": "09:35,14:55",
+                "future_key": "keep",
             }
         }
     ]
@@ -117,7 +152,7 @@ def test_feishu_notification_schedule_persists_comma_joined_times(
 
 
 def test_macd_optimization_schedule_persists_notify_feishu(
-    fake_scheduler, persisted_updates
+    fake_scheduler, persisted_updates, current_config
 ):
     result = scheduler_settings_service.configure_macd_optimization_schedule(
         True, "22:15", True
@@ -128,14 +163,37 @@ def test_macd_optimization_schedule_persists_notify_feishu(
             "macd_optimization_schedule": {
                 "enabled": True,
                 "time": "22:15",
-                "lookback_days": 365,
+                "lookback_days": 180,
                 "notify_feishu": True,
+                "future_key": "keep",
             }
         }
     ]
     assert result["success"] is True
     assert result["message"] == "MACD参数优化定时任务已启用，执行时间: 22:15"
     assert result["data"] == fake_scheduler.get_status()
+
+
+def test_macd_optimization_schedule_preserves_notify_feishu_when_missing(
+    fake_scheduler, persisted_updates, current_config
+):
+    result = scheduler_settings_service.configure_macd_optimization_schedule(
+        True, "22:15", None
+    )
+
+    assert persisted_updates == [
+        {
+            "macd_optimization_schedule": {
+                "enabled": True,
+                "time": "22:15",
+                "lookback_days": 180,
+                "notify_feishu": True,
+                "future_key": "keep",
+            }
+        }
+    ]
+    assert fake_scheduler.macd_optimization_notify_feishu is True
+    assert result["success"] is True
 
 
 def test_failed_config_update_raises_runtime_error(monkeypatch, fake_scheduler):

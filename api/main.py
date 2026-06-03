@@ -1459,7 +1459,7 @@ async def configure_macd_optimization_schedule(request: Request):
         data = await request.json()
         enabled = data.get('enabled', False)
         opt_time = data.get('time', '23:00')
-        notify_feishu = data.get('notify_feishu', False)
+        notify_feishu = data.get('notify_feishu') if 'notify_feishu' in data else None
 
         from core.scheduler_settings_service import configure_macd_optimization_schedule
         return configure_macd_optimization_schedule(enabled, opt_time, notify_feishu)
