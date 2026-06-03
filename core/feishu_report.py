@@ -3,15 +3,13 @@
 ETF操作建议报告生成器
 生成飞书消息格式的ETF操作建议
 """
-import sqlite3
 from typing import Dict, List, Optional
-from pathlib import Path
 from datetime import datetime
 
 from core.database import get_etf_connection
 from core.watchlist import load_watchlist
-from core.profit_calculator import calculate_daily_profit
-import config
+from core.position_signal_service import build_feishu_operation_rows
+from core.profit_calculator import SLOT_VALUE, calculate_daily_profit
 
 
 class ETFOperationReport:
@@ -29,125 +27,38 @@ class ETFOperationReport:
         if not self.watchlist or not self.watchlist.get('etfs'):
             return False
 
-        # 直接调用内部函数获取信号数据（避免HTTP认证问题）
         try:
-            from core.watchlist import calculate_realtime_signal
-            from core.database import get_etf_daily_data
-            from core.position_manager import get_position
-
-            print("✓ 直接调用内部函数获取数据")
-
-            # 使用统一固定回测起点，避免每天滚动窗口导致结果漂移
-            start_date_str = config.DEFAULT_START_DATE
-
-            etfs = self.watchlist.get('etfs', [])
-            for etf in etfs:
-                code = etf['code']
-                name = etf.get('name', code)
-                strategy = etf.get('strategy', 'macd_aggressive')
-
-                try:
-                    # 调用内部信号计算函数（使用和API相同的参数）
-                    signal_result = calculate_realtime_signal(code, start_date_str, strategy)
-
-                    # 检查返回结果
-                    if signal_result and signal_result.get('success'):
-                        data = signal_result.get('data', {})
-                        latest_data = data.get('latest_data', {})
-                        current_positions = data.get('positions_used', 0)
-                        pos = get_position(code)
-                        previous_positions = pos.get('current_positions', 0) if pos else 0
-                        today_action = current_positions - previous_positions
-                        total_positions = etf.get('total_positions', 10)
-
-                        # 计算当日涨幅（和API相同的逻辑）
-                        daily_change_pct = 0.0
-                        try:
-                            recent_data = get_etf_daily_data(code)
-                            if recent_data and len(recent_data) >= 2:
-                                today_close = float(recent_data[-1].get('close', 0))
-                                yesterday_close = float(recent_data[-2].get('close', 0))
-                                if yesterday_close > 0:
-                                    daily_change_pct = ((today_close - yesterday_close) / yesterday_close) * 100
-                        except Exception as e:
-                            daily_change_pct = 0.0
-
-                        # 计算今日收益（基于实际持仓，和API相同的公式）
-                        yesterday_positions = previous_positions
-                        daily_profit = calculate_daily_profit(yesterday_positions, daily_change_pct)
-
-                        # 和主界面保持一致：今日操作基于持仓变化，而不是涨跌幅
-                        action_reason = ''
-                        if today_action > 0:
-                            if latest_data.get('signal_type') == 'BUY':
-                                strength = latest_data.get('signal_strength', 0)
-                                if strength >= 10:
-                                    action_reason = '回踩MA60未破+MACD金叉，最强买入信号'
-                                elif strength >= 9:
-                                    action_reason = '正鸭嘴形态，强烈看多'
-                                elif strength >= 8:
-                                    action_reason = '零轴上方金叉，上升趋势明确'
-                                else:
-                                    action_reason = 'MACD金叉买入'
-                            else:
-                                action_reason = '加仓买入'
-                        elif today_action < 0:
-                            macd_dif = latest_data.get('macd_dif', 0)
-                            macd_dea = latest_data.get('macd_dea', 0)
-                            kdj_k = latest_data.get('kdj_k', 0)
-                            kdj_status = '严重超买' if kdj_k > 80 else ('超买' if kdj_k > 70 else '正常')
-
-                            if kdj_status == '严重超买':
-                                action_reason = f'KDJ{kdj_status}，止盈减仓'
-                            elif macd_dif < macd_dea:
-                                action_reason = 'MACD死叉，减仓避险'
-                            elif current_positions > 7:
-                                action_reason = '涨幅较大，分批止盈'
-                            else:
-                                action_reason = '信号转弱，减仓保住利润'
-                        else:
-                            action_reason = '保持现有仓位'
-
-                        if today_action > 0:
-                            today_operation = f'买入{today_action}仓'
-                        elif today_action < 0:
-                            today_operation = f'卖出{abs(today_action)}仓'
-                        else:
-                            today_operation = '持有'
-
-                        self.etf_data[code] = {
-                            'name': latest_data.get('name', name),
-                            'close': latest_data.get('close', 0),
-                            'pct_chg': daily_change_pct,  # 使用计算的涨幅
-                            'previous_positions_used': yesterday_positions,  # 昨日持仓
-                            'positions_used': current_positions,  # 今日持仓
-                            'daily_profit': daily_profit,  # 今日收益
-                            'today_action_count': today_action,
-                            'today_operation': today_operation,
-                            'action_reason': action_reason,
-                            'next_action': data.get('next_action', '--'),
-                            'signal_type': latest_data.get('signal_type', 'HOLD'),
-                            'signal_strength': latest_data.get('signal_strength', 0),
-                            'total_positions': total_positions
-                        }
-                    else:
-                        print(f"⚠️  {code} 信号计算失败: {signal_result.get('message', '未知错误')}")
-                except Exception as e:
-                    print(f"⚠️  获取 {code} 数据失败: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    continue
-
-            if self.etf_data:
-                print(f"✓ 成功获取 {len(self.etf_data)} 个ETF的数据")
-                return True
-
+            shared_result = build_feishu_operation_rows()
+            if shared_result and shared_result.get('success') and shared_result.get('data'):
+                self.etf_data = {}
+                for row in shared_result.get('data', []):
+                    code = row.get('code')
+                    if not code:
+                        continue
+                    self.etf_data[code] = {
+                        'name': row.get('name', code),
+                        'close': row.get('close', 0),
+                        'pct_chg': row.get('pct_chg', 0),
+                        'previous_positions_used': row.get('previous_positions_used', 0),
+                        'positions_used': row.get('positions_used', 0),
+                        'daily_profit': row.get('daily_profit', 0),
+                        'today_action_count': row.get('today_action_count', 0),
+                        'today_operation': row.get('today_operation', '持有'),
+                        'action_reason': row.get('action_reason', ''),
+                        'next_action': row.get('next_action', '--'),
+                        'signal_type': row.get('signal_type', 'HOLD'),
+                        'signal_strength': row.get('signal_strength', 0),
+                        'total_positions': row.get('total_positions', 10),
+                    }
+                if self.etf_data:
+                    print(f"✓ 成功获取 {len(self.etf_data)} 个ETF的数据")
+                    return True
         except Exception as e:
-            print(f"❌ 调用内部函数失败: {e}")
+            print(f"❌ 获取共享信号数据失败: {e}")
             import traceback
             traceback.print_exc()
 
-        # 如果内部调用失败，使用数据库数据（fallback）
+        # 如果共享信号数据不可用，使用数据库数据（fallback）
         # 获取ETF数据
         etfs = self.watchlist.get('etfs', [])
         for etf in etfs:
@@ -220,7 +131,7 @@ class ETFOperationReport:
         lines.append(f"| 监控ETF | {etf_count}个 | 自选列表总数 |")
         lines.append(f"| 有持仓ETF | {stats.get('active_etf_count', 0)}个 | 昨日实际有持仓 |")
         lines.append(f"| 昨日总仓位 | {stats.get('total_positions', 0)}仓 | 实际持仓总和 |")
-        lines.append(f"| 昨日总资金 | ¥{stats.get('total_capital', 0):,.0f} | 持仓总价值（200元/仓）|")
+        lines.append(f"| 昨日总资金 | ¥{stats.get('total_capital', 0):,.0f} | 持仓总价值（{SLOT_VALUE}元/仓）|")
         lines.append(f"| 今日总收益 | ¥{stats.get('total_return', 0):+,.2f} | 当日浮动盈亏 |\n")
 
         # 今日操作建议总结
@@ -314,7 +225,7 @@ class ETFOperationReport:
         etfs = self.watchlist.get('etfs', [])
 
         total_positions = 0  # 昨日总仓位（实际持仓）
-        total_capital = 0  # 昨日总资金（实际持仓 × 200元/仓）
+        total_capital = 0  # 昨日总资金（实际持仓 × 每仓资金）
         total_return = 0  # 今日总收益
         active_etf_count = 0  # 有持仓的ETF数量
 
@@ -332,8 +243,7 @@ class ETFOperationReport:
             if previous_positions_used > 0:
                 active_etf_count += 1
 
-                # 每仓200元
-                investment = previous_positions_used * 200
+                investment = previous_positions_used * SLOT_VALUE
 
                 total_positions += previous_positions_used
                 total_capital += investment
