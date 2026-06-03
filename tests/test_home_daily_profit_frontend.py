@@ -81,6 +81,9 @@ def test_homepage_does_not_expose_scheduler_settings_controls():
 
     assert "schedulerSettingsModal" not in html
     assert "schedulerSettingsBtn" not in html
+    assert "showSchedulerSettings" not in source
+    assert "hideSchedulerSettings" not in source
+    assert "loadSchedulerSettings" not in source
     assert "saveSchedulerSettings" not in source
     assert "/api/macd/optimization/schedule/configure" not in source
 
