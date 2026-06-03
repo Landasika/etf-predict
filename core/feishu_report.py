@@ -42,7 +42,7 @@ class ETFOperationReport:
         shared_success = shared_result.get('success')
         shared_data = shared_result.get('data')
 
-        if shared_success not in (True, False):
+        if shared_success is not True and shared_success is not False:
             print(f"❌ 共享信号数据success字段无效: {shared_success!r}")
             return False
 
