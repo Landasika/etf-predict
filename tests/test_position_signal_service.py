@@ -114,3 +114,31 @@ def test_build_position_signal_rows_uses_cache_after_lock_even_when_refresh(monk
     assert result["data"][0]["code"] == "562360.SH"
     assert result["data"][0]["db_position"] == 4
     assert result["data"][0]["monthly_profit"] == 9.0
+
+
+def test_build_position_signal_rows_copies_cached_rows_before_enriching(monkeypatch):
+    from core import database, position_manager, position_signal_service
+
+    cached_row = {"code": "562360.SH", "data_date": "20260603"}
+    cached_payload = {
+        "data": [cached_row],
+        "count": 1,
+    }
+
+    monkeypatch.setattr(position_signal_service, "_is_after_position_grid_lock_time", lambda now=None: True)
+    monkeypatch.setattr(database, "get_latest_data_date", lambda: "20260603")
+    monkeypatch.setattr(database, "get_batch_cache", lambda cache_type, data_date: cached_payload)
+    monkeypatch.setattr(position_manager, "get_all_positions", lambda: [{
+        "etf_code": "562360.SH",
+        "current_positions": 4,
+        "total_shares": 800,
+        "avg_cost": 1.1,
+    }])
+    monkeypatch.setattr(position_signal_service, "calculate_monthly_profit", lambda *args: 9.0)
+
+    result = position_signal_service.build_position_signal_rows(refresh=True)
+
+    assert result["data"][0] is not cached_row
+    assert result["data"][0]["db_position"] == 4
+    assert result["data"][0]["monthly_profit"] == 9.0
+    assert cached_row == {"code": "562360.SH", "data_date": "20260603"}

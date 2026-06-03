@@ -9,7 +9,6 @@ from fastapi.templating import Jinja2Templates
 from fastapi import Request
 from starlette.middleware.sessions import SessionMiddleware
 from typing import Optional, List
-from datetime import datetime, time
 import sys
 import os
 import logging
@@ -31,53 +30,6 @@ from api.data_service import (
 app = FastAPI(title=config.API_TITLE, version=config.API_VERSION)
 logger = logging.getLogger(__name__)
 app.add_exception_handler(DataServiceAuthError, data_service_auth_exception_handler)
-
-POSITION_GRID_LOCK_TIME = time(15, 5)
-
-
-def _is_after_position_grid_lock_time(now=None) -> bool:
-    now = now or datetime.now()
-    return now.time() >= POSITION_GRID_LOCK_TIME
-
-
-def _can_recompute_position_grid(
-    refresh: bool = False,
-    realtime: bool = False,
-    cached: Optional[dict] = None,
-    now=None,
-) -> bool:
-    """Whitelist conditions that may change the homepage position grid."""
-    if cached and _is_after_position_grid_lock_time(now):
-        return False
-    if realtime:
-        return True
-    if refresh:
-        return True
-    return cached is None
-
-
-def _cached_batch_signals_response(cached: dict, data_date: str) -> dict:
-    from core.position_manager import get_all_positions
-
-    db_positions = {p['etf_code']: p for p in get_all_positions()}
-    for r in cached.get('data', []):
-        db = db_positions.get(r.get('code', ''), {})
-        r['db_position'] = db.get('current_positions', 0)
-        r['db_shares'] = db.get('total_shares', 0)
-        r['db_avg_cost'] = db.get('avg_cost', 0)
-        if 'monthly_profit' not in r:
-            r['monthly_profit'] = calculate_monthly_profit(
-                r.get('code', ''),
-                r.get('data_date') or data_date,
-                r['db_position'],
-            )
-    return {
-        'success': True,
-        'data': cached.get('data', []),
-        'count': cached.get('count', 0),
-        'cached': True,
-        'data_date': data_date
-    }
 
 
 def _normalize_trade_date(value) -> str:

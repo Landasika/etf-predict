@@ -105,7 +105,9 @@ def _get_macd_params_display(etf: dict) -> dict:
 
 def _cached_batch_signals_response(cached: dict, data_date: str) -> dict:
     db_positions = {p['etf_code']: p for p in position_manager.get_all_positions()}
-    for row in cached.get('data', []):
+    rows = []
+    for cached_row in cached.get('data', []):
+        row = dict(cached_row)
         db = db_positions.get(row.get('code', ''), {})
         row['db_position'] = db.get('current_positions', 0)
         row['db_shares'] = db.get('total_shares', 0)
@@ -116,9 +118,10 @@ def _cached_batch_signals_response(cached: dict, data_date: str) -> dict:
                 row.get('data_date') or data_date,
                 row['db_position'],
             )
+        rows.append(row)
     return {
         'success': True,
-        'data': cached.get('data', []),
+        'data': rows,
         'count': cached.get('count', 0),
         'cached': True,
         'data_date': data_date,
