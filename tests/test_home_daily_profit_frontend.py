@@ -88,6 +88,17 @@ def test_homepage_does_not_expose_scheduler_settings_controls():
     assert "/api/macd/optimization/schedule/configure" not in source
 
 
+def test_homepage_does_not_expose_macd_optimization_controls():
+    html = INDEX_HTML.read_text(encoding="utf-8")
+    source = HOME_JS.read_text(encoding="utf-8")
+
+    assert "optimizeAllBtn" not in html
+    assert "optimizeAllBtn" not in source
+    assert "optimizeAllMACDParams" not in source
+    assert "/api/macd/optimize-params" not in source
+    assert "/api/watchlist/${etf.code}/macd-params" not in source
+
+
 def test_strategy_overview_tabs_default_to_grid_and_can_switch():
     html = INDEX_HTML.read_text(encoding="utf-8")
     source = HOME_JS.read_text(encoding="utf-8")

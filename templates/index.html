@@ -55,9 +55,6 @@
                 <button id="showAdviceBtn" class="btn btn-advice">
                     <span class="btn-icon">💡</span> 操作建议
                 </button>
-                <button id="optimizeAllBtn" class="btn btn-optimize-all">
-                    <span class="btn-icon">⚡</span> 一键优化所有参数
-                </button>
                 <!-- 实时监控控制 -->
                 <div class="realtime-control">
                     <button id="toggleRealtimeBtn" class="btn btn-realtime">
@@ -183,29 +180,6 @@
                     </div>
                     <div class="update-status-text" id="dataUpdateStatusText">正在准备...</div>
                 </div>
-            </section>
-
-            <!-- 优化进度面板 -->
-            <section id="optimizeProgressPanel" class="optimize-progress-panel" style="display: none;">
-                <h3>⚡ 批量优化进度</h3>
-                <div class="progress-stats">
-                    <div class="progress-stat">
-                        <span class="stat-label">总数</span>
-                        <span id="optTotalCount" class="stat-value">0</span>
-                    </div>
-                    <div class="progress-stat">
-                        <span class="stat-label">已完成</span>
-                        <span id="optCompletedCount" class="stat-value completed">0</span>
-                    </div>
-                    <div class="progress-stat">
-                        <span class="stat-label">失败</span>
-                        <span id="optFailedCount" class="stat-value failed">0</span>
-                    </div>
-                </div>
-                <div class="progress-bar-container">
-                    <div id="optProgressBar" class="progress-bar"></div>
-                </div>
-                <div class="progress-log" id="optProgressLog"></div>
             </section>
 
             <!-- 实时监控设置弹窗 -->
