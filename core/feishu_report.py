@@ -29,12 +29,21 @@ class ETFOperationReport:
 
         try:
             shared_result = build_feishu_operation_rows()
-            if shared_result and shared_result.get('success') and shared_result.get('data'):
+        except Exception as e:
+            print(f"❌ 获取共享信号数据失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+
+        if shared_result and shared_result.get('success') and shared_result.get('data'):
+            try:
                 self.etf_data = {}
                 for row in shared_result.get('data', []):
+                    if not isinstance(row, dict):
+                        raise ValueError(f"共享信号行格式无效: {row!r}")
                     code = row.get('code')
                     if not code:
-                        continue
+                        raise ValueError(f"共享信号行缺少code: {row!r}")
                     self.etf_data[code] = {
                         'name': row.get('name', code),
                         'close': row.get('close', 0),
@@ -53,10 +62,11 @@ class ETFOperationReport:
                 if self.etf_data:
                     print(f"✓ 成功获取 {len(self.etf_data)} 个ETF的数据")
                     return True
-        except Exception as e:
-            print(f"❌ 获取共享信号数据失败: {e}")
-            import traceback
-            traceback.print_exc()
+            except Exception as e:
+                print(f"❌ 解析共享信号数据失败: {e}")
+                import traceback
+                traceback.print_exc()
+                return False
 
         # 如果共享信号数据不可用，使用数据库数据（fallback）
         # 获取ETF数据
