@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ETF策略汇总 - ETF预测系统</title>
-    <link rel="stylesheet" href="/static/css/home.css?v=8">
+    <link rel="stylesheet" href="/static/css/home.css?v=12">
     <script src="/static/js/echarts.min.js"></script>
 </head>
 <body>
@@ -85,27 +85,86 @@
                 </div>
             </section>
 
-            <!-- 今日收益面板 -->
-            <section class="daily-profit-panel" id="dailyProfitPanel" style="display: none;">
-                <h3 class="panel-title">💰 今日收益 <small style="font-size: 13px; font-weight: 400; color: #166534;">(基于昨日持仓)</small></h3>
-                <div class="daily-profit-content">
-                    <div class="daily-profit-stats">
-                        <div class="daily-profit-stat-item">
-                            <span class="stat-label">昨日总仓位</span>
-                            <span id="yesterdayTotalPositions" class="stat-value">0仓</span>
-                        </div>
-                        <div class="daily-profit-stat-item">
-                            <span class="stat-label">昨日总资金</span>
-                            <span id="yesterdayTotalInvestment" class="stat-value">¥0</span>
-                        </div>
+            <!-- 策略汇总 -->
+            <section class="strategy-overview-section">
+                <div class="strategy-overview-header">
+                    <h2 class="section-title">策略汇总</h2>
+                    <div class="strategy-tabs" role="tablist" aria-label="策略汇总视图">
+                        <button type="button" data-strategy-tab="grid" class="strategy-tab active" role="tab" aria-selected="true">持仓格子</button>
+                        <button type="button" data-strategy-tab="table" class="strategy-tab" role="tab" aria-selected="false">明细表格</button>
                     </div>
-                    <div class="daily-profit-total">
-                        <span class="daily-profit-label">今日总收益</span>
-                        <span id="dailyProfitTotal" class="daily-profit-value">¥0.00</span>
-                        <span id="dailyProfitPct" class="daily-profit-pct">(0.00%)</span>
-                    </div>
-                    <div class="daily-profit-details" id="dailyProfitDetails">
-                        <!-- 动态生成 -->
+                </div>
+
+                <div data-strategy-panel="grid" class="strategy-tab-panel active" role="tabpanel">
+                    <section class="position-grid-panel" id="positionGridPanel">
+                        <div class="position-grid-header">
+                            <div>
+                                <h3 class="panel-title">持仓格子</h3>
+                                <p class="position-grid-subtitle">昨日策略仓位 → 今日策略仓位，默认按策略建议执行</p>
+                            </div>
+                            <div class="position-grid-sort-note">排序：加仓最多 → 减仓最多 → 持有不变</div>
+                        </div>
+                        <div class="position-grid-summary" id="positionGridSummary">
+                            <div class="position-grid-metric">
+                                <span>昨日策略仓位</span>
+                                <strong id="positionGridPreviousTotal">0 格</strong>
+                            </div>
+                            <div class="position-grid-metric">
+                                <span>今日策略仓位</span>
+                                <strong id="positionGridTargetTotal">0 格</strong>
+                            </div>
+                            <div class="position-grid-metric add">
+                                <span>建议加仓</span>
+                                <strong id="positionGridAddTotal">+0 格</strong>
+                            </div>
+                            <div class="position-grid-metric reduce">
+                                <span>建议减仓</span>
+                                <strong id="positionGridReduceTotal">-0 格</strong>
+                            </div>
+                            <div class="position-grid-metric daily-profit">
+                                <span>总当日盈亏</span>
+                                <strong id="positionGridDailyProfitTotal">¥0.00</strong>
+                            </div>
+                            <div class="position-grid-metric monthly-profit">
+                                <span>总本月盈亏</span>
+                                <strong id="positionGridMonthlyProfitTotal">¥0.00</strong>
+                            </div>
+                        </div>
+                        <div class="position-grid-cards" id="positionGridCards">
+                            <div class="position-grid-empty">正在加载持仓格子...</div>
+                        </div>
+                    </section>
+                </div>
+
+                <div data-strategy-panel="table" class="strategy-tab-panel" role="tabpanel">
+                    <div class="table-container">
+                        <table class="strategy-table" id="strategyTable">
+                            <thead>
+                                <tr>
+                                    <th>ETF代码</th>
+                                    <th>ETF名称</th>
+                                    <th>策略</th>
+                                    <th>MACD参数</th>
+                                    <th>今日操作</th>
+                                    <th>下个交易日操作</th>
+                                    <th>近一年策略收益率</th>
+                                    <th>近一年股票涨幅率</th>
+                                    <th>持仓</th>
+                                    <th>当日涨幅</th>
+                                    <th>当日盈亏</th>
+                                    <th>本月盈亏</th>
+                                    <th>因子</th>
+                                    <th>数据更新日期</th>
+                                    <th>备注</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="strategyTableBody">
+                                <tr class="loading-row">
+                                    <td colspan="16" class="loading-cell">加载中...</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </section>
@@ -245,37 +304,6 @@
                 </div>
             </div>
 
-            <!-- 策略表格 -->
-            <section class="strategy-table-section">
-                <h2 class="section-title">策略汇总</h2>
-                <div class="table-container">
-                    <table class="strategy-table" id="strategyTable">
-                        <thead>
-                            <tr>
-                                <th>ETF代码</th>
-                                <th>ETF名称</th>
-                                <th>策略</th>
-                                <th>MACD参数</th>
-                                <th>今日操作</th>
-                                <th>下个交易日操作</th>
-                                <th>近一年策略收益率</th>
-                                <th>近一年股票涨幅率</th>
-                                <th>持仓</th>
-                                <th>当日涨幅</th>
-                                <th>因子</th>
-                                <th>数据更新日期</th>
-                                <th>备注</th>
-                                <th>操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="strategyTableBody">
-                            <tr class="loading-row">
-                                <td colspan="14" class="loading-cell">加载中...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
         </main>
     </div>
 
@@ -362,6 +390,6 @@
         </div>
     </div>
 
-    <script src="/static/js/home.js?v=83"></script>
+    <script src="/static/js/home.js?v=90"></script>
 </body>
 </html>

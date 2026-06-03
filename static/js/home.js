@@ -1,5 +1,5 @@
 // 首页策略汇总
-console.log('📝 home.js v76 已加载 - 修复session和鉴权问题');
+console.log('📝 home.js v90 已加载 - 首页持仓格子');
 
 // 实时更新控制
 let realtimeEnabled = false;
@@ -62,6 +62,8 @@ document.addEventListener('DOMContentLoaded', function() {
         column: null,
         direction: 'asc'
     };
+
+    setupStrategyOverviewTabs();
 
     // 加载批量信号数据
     loadBatchSignals();
@@ -179,6 +181,34 @@ document.addEventListener('DOMContentLoaded', function() {
 // 全局数据存储
 let strategyData = [];
 
+function setupStrategyOverviewTabs() {
+    const tabs = Array.from(document.querySelectorAll('[data-strategy-tab]'));
+    const panels = Array.from(document.querySelectorAll('[data-strategy-panel]'));
+
+    if (tabs.length === 0 || panels.length === 0) {
+        return;
+    }
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.getAttribute('data-strategy-tab');
+
+            tabs.forEach(item => {
+                const isActive = item === tab;
+                item.classList.toggle('active', isActive);
+                item.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            });
+
+            panels.forEach(panel => {
+                panel.classList.toggle(
+                    'active',
+                    panel.getAttribute('data-strategy-panel') === target
+                );
+            });
+        });
+    });
+}
+
 // 加载批量信号数据
 async function loadBatchSignals(forceRefresh = false) {
     try {
@@ -187,9 +217,9 @@ async function loadBatchSignals(forceRefresh = false) {
 
         if (result.success) {
             strategyData = result.data;
+            renderPositionGrid(strategyData);
             renderStrategyTable(strategyData);
             updateStats(strategyData);
-            updateDailyProfit(strategyData);  // 更新今日收益
             updateLastUpdated();
 
             // 显示缓存状态
@@ -208,6 +238,249 @@ async function loadBatchSignals(forceRefresh = false) {
     }
 }
 
+function clampSlotValue(value, fallback = 0) {
+    const numberValue = Number(value);
+    if (!Number.isFinite(numberValue)) {
+        return fallback;
+    }
+    return Math.max(0, Math.trunc(numberValue));
+}
+
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getValidPositionGridItems(data) {
+    if (!Array.isArray(data)) {
+        return [];
+    }
+    return data.filter(item => item && typeof item === 'object');
+}
+
+function getStrategySlotMovement(item) {
+    const source = item && typeof item === 'object' ? item : {};
+    const latestData = source.latest_data || {};
+    const rawTotalSlots = clampSlotValue(source.total_positions, 10);
+    const totalSlots = rawTotalSlots > 0 ? rawTotalSlots : 10;
+    const previousSlots = Math.min(
+        clampSlotValue(latestData.previous_positions_used, 0),
+        totalSlots
+    );
+    const targetSlots = Math.min(
+        clampSlotValue(source.positions_used, 0),
+        totalSlots
+    );
+
+    return {
+        previousSlots,
+        targetSlots,
+        totalSlots,
+        delta: targetSlots - previousSlots
+    };
+}
+
+function sortPositionGridItems(data) {
+    return [...data].sort((a, b) => {
+        const aMove = getStrategySlotMovement(a);
+        const bMove = getStrategySlotMovement(b);
+        const groupRank = (move) => {
+            if (move.delta > 0) return 0;
+            if (move.delta < 0) return 1;
+            return 2;
+        };
+
+        const rankDiff = groupRank(aMove) - groupRank(bMove);
+        if (rankDiff !== 0) return rankDiff;
+
+        if (aMove.delta > 0 && bMove.delta > 0) {
+            return bMove.delta - aMove.delta || String(a.code).localeCompare(String(b.code));
+        }
+        if (aMove.delta < 0 && bMove.delta < 0) {
+            return Math.abs(bMove.delta) - Math.abs(aMove.delta) || String(a.code).localeCompare(String(b.code));
+        }
+        return bMove.targetSlots - aMove.targetSlots || String(a.code).localeCompare(String(b.code));
+    });
+}
+
+function renderSlotSegments(previousSlots, targetSlots, totalSlots) {
+    const keepSlots = Math.min(previousSlots, targetSlots);
+    return Array.from({ length: totalSlots }, (_, index) => {
+        let className = 'position-slot-segment empty';
+        if (index < keepSlots) {
+            className = 'position-slot-segment keep';
+        } else if (index < targetSlots && targetSlots > previousSlots) {
+            className = 'position-slot-segment add';
+        } else if (index < previousSlots && previousSlots > targetSlots) {
+            className = 'position-slot-segment reduce';
+        }
+        return `<span class="${className}" aria-hidden="true"></span>`;
+    }).join('');
+}
+
+function getPositionGridReason(item, delta) {
+    const latestData = item.latest_data || {};
+    if (item.action_reason) return item.action_reason;
+    if (latestData.signal_reason) return latestData.signal_reason;
+    if (item.next_action && item.next_action !== '--') return item.next_action;
+    if (delta > 0) return '策略建议加仓';
+    if (delta < 0) return '策略建议减仓';
+    return '保持现有策略仓位';
+}
+
+function getPositionGridCardClass(delta) {
+    if (delta > 0) return 'position-grid-card add';
+    if (delta < 0) return 'position-grid-card reduce';
+    return 'position-grid-card hold';
+}
+
+function getPositionGridBadge(delta) {
+    if (delta > 0) return `<span class="position-delta-badge add">+${delta} 格</span>`;
+    if (delta < 0) return `<span class="position-delta-badge reduce">${delta} 格</span>`;
+    return '<span class="position-delta-badge hold">不变</span>';
+}
+
+function formatMoney(value) {
+    const numberValue = Number(value || 0);
+    const prefix = numberValue > 0 ? '+' : '';
+    return `${prefix}¥${numberValue.toFixed(2)}`;
+}
+
+function getPositionGridMacdParamsText(item) {
+    const params = item.macd_params || {};
+    const fast = params.fast ?? 8;
+    const slow = params.slow ?? 17;
+    const signal = params.signal ?? 5;
+    return `F:${fast} S:${slow} Sig:${signal}`;
+}
+
+function renderPositionGrid(data) {
+    const panel = document.getElementById('positionGridPanel');
+    const cardsEl = document.getElementById('positionGridCards');
+    const previousTotalEl = document.getElementById('positionGridPreviousTotal');
+    const targetTotalEl = document.getElementById('positionGridTargetTotal');
+    const addTotalEl = document.getElementById('positionGridAddTotal');
+    const reduceTotalEl = document.getElementById('positionGridReduceTotal');
+    const dailyProfitTotalEl = document.getElementById('positionGridDailyProfitTotal');
+    const monthlyProfitTotalEl = document.getElementById('positionGridMonthlyProfitTotal');
+
+    if (!panel || !cardsEl || !previousTotalEl || !targetTotalEl || !addTotalEl || !reduceTotalEl || !dailyProfitTotalEl || !monthlyProfitTotalEl) {
+        return;
+    }
+
+    const validItems = getValidPositionGridItems(data);
+
+    if (validItems.length === 0) {
+        previousTotalEl.textContent = '0 格';
+        targetTotalEl.textContent = '0 格';
+        addTotalEl.textContent = '+0 格';
+        reduceTotalEl.textContent = '-0 格';
+        dailyProfitTotalEl.textContent = formatMoney(0);
+        dailyProfitTotalEl.className = getProfitClass(0);
+        monthlyProfitTotalEl.textContent = formatMoney(0);
+        monthlyProfitTotalEl.className = getProfitClass(0);
+        cardsEl.innerHTML = '<div class="position-grid-empty">暂无数据，请先添加ETF到自选</div>';
+        panel.style.display = 'block';
+        return;
+    }
+
+    const items = sortPositionGridItems(validItems);
+    let previousTotal = 0;
+    let targetTotal = 0;
+    let addTotal = 0;
+    let reduceTotal = 0;
+    let totalDailyProfit = 0;
+    let totalMonthlyProfit = 0;
+
+    const cardsHtml = items.map((item) => {
+        const movement = getStrategySlotMovement(item);
+        previousTotal += movement.previousSlots;
+        targetTotal += movement.targetSlots;
+        if (movement.delta > 0) addTotal += movement.delta;
+        if (movement.delta < 0) reduceTotal += Math.abs(movement.delta);
+
+        const latestData = item.latest_data || {};
+        const macd = item.macd || {};
+        const kdj = item.kdj || {};
+        const signal = item.signal_name || item.signal || '持有';
+        const signalStrength = item.signal_strength ?? latestData.signal_strength ?? 0;
+        const strategyText = getShortStrategyName(item.strategy);
+        const macdParamsText = getPositionGridMacdParamsText(item);
+        const dailyChange = Number(item.daily_change_pct || 0);
+        const dailyProfit = Number(item.daily_profit || 0);
+        const monthlyProfit = Number(item.monthly_profit || 0);
+        totalDailyProfit += dailyProfit;
+        totalMonthlyProfit += monthlyProfit;
+        const dailyChangeText = `${dailyChange >= 0 ? '+' : ''}${dailyChange.toFixed(2)}%`;
+        const dailyChangeClass = getProfitClass(dailyChange);
+        const dailyProfitClass = getProfitClass(dailyProfit);
+        const monthlyProfitClass = getProfitClass(monthlyProfit);
+        const macdText = Number.isFinite(Number(macd.hist)) ? `MACD ${Number(macd.hist).toFixed(4)}` : 'MACD --';
+        const kdjText = kdj.status || 'KDJ --';
+        const reason = getPositionGridReason(item, movement.delta);
+        const code = item.code ?? '--';
+        const remark = item.remark || item.name || code;
+        const safeCode = escapeHtml(code);
+        const safeName = escapeHtml(item.name || code);
+        const safeRemark = escapeHtml(remark);
+        const safeSignal = escapeHtml(signal);
+        const safeSignalStrength = escapeHtml(signalStrength);
+        const safeStrategyText = escapeHtml(strategyText);
+        const safeMacdParamsText = escapeHtml(macdParamsText);
+        const safeMacdText = escapeHtml(macdText);
+        const safeKdjText = escapeHtml(kdjText);
+        const safeReason = escapeHtml(reason);
+        const safeAriaLabel = escapeHtml(`${code} 今日策略仓位 ${movement.targetSlots} 格`);
+
+        return `
+            <article class="${getPositionGridCardClass(movement.delta)}">
+                <div class="position-card-head">
+                    <div>
+                        <div class="position-card-name">${safeName}</div>
+                        <div class="position-card-code">${safeCode}</div>
+                        <div class="position-card-remark">${safeRemark}</div>
+                    </div>
+                    ${getPositionGridBadge(movement.delta)}
+                </div>
+                <div class="position-card-change">
+                    <strong>${movement.previousSlots} → ${movement.targetSlots}</strong>
+                    <span>昨日策略 → 今日策略</span>
+                </div>
+                <div class="position-slot-bar" style="--slot-total:${movement.totalSlots}" role="meter" aria-valuemin="0" aria-valuemax="${movement.totalSlots}" aria-valuenow="${movement.targetSlots}" aria-label="${safeAriaLabel}">
+                    ${renderSlotSegments(movement.previousSlots, movement.targetSlots, movement.totalSlots)}
+                </div>
+                <div class="position-card-meta">
+                    <span>策略 <b>${safeStrategyText}</b></span>
+                    <span>MACD参数 <b>${safeMacdParamsText}</b></span>
+                    <span>信号 <b>${safeSignal}</b></span>
+                    <span>强度 <b>${safeSignalStrength}</b></span>
+                    <span>今日涨跌 <b class="${dailyChangeClass}">${dailyChangeText}</b></span>
+                    <span>当日盈亏 <b class="${dailyProfitClass}">${formatMoney(dailyProfit)}</b></span>
+                    <span>本月盈亏 <b class="${monthlyProfitClass}">${formatMoney(monthlyProfit)}</b></span>
+                    <span><b>${safeMacdText}</b></span>
+                    <span><b>${safeKdjText}</b></span>
+                </div>
+                <div class="position-card-reason" title="${safeReason}">${safeReason}</div>
+            </article>
+        `;
+    }).join('');
+
+    previousTotalEl.textContent = `${previousTotal} 格`;
+    targetTotalEl.textContent = `${targetTotal} 格`;
+    addTotalEl.textContent = `+${addTotal} 格`;
+    reduceTotalEl.textContent = `-${reduceTotal} 格`;
+    dailyProfitTotalEl.textContent = formatMoney(totalDailyProfit);
+    dailyProfitTotalEl.className = getProfitClass(totalDailyProfit);
+    monthlyProfitTotalEl.textContent = formatMoney(totalMonthlyProfit);
+    monthlyProfitTotalEl.className = getProfitClass(totalMonthlyProfit);
+    cardsEl.innerHTML = cardsHtml;
+    panel.style.display = 'block';
+}
+
 // 渲染策略表格
 function renderStrategyTable(data) {
     const tbody = document.getElementById('strategyTableBody');
@@ -215,7 +488,7 @@ function renderStrategyTable(data) {
     if (data.length === 0) {
         tbody.innerHTML = `
             <tr class="empty-row">
-                <td colspan="14" class="empty-cell">
+                <td colspan="16" class="empty-cell">
                     暂无数据，请先添加ETF到自选
                 </td>
             </tr>
@@ -237,6 +510,8 @@ function renderStrategyTable(data) {
         // 近一年收益率（数据已经是近一年的，不需要再除以2）
         const strategyReturn = item.profit_pct;
         const stockReturn = (item.benchmark_return || 0);
+        const dailyProfit = Number(item.daily_profit || 0);
+        const monthlyProfit = Number(item.monthly_profit || 0);
 
         // 备注：优先使用用户自定义备注，否则使用自动生成的
         const remark = item.remark || generateRemark(item);
@@ -307,6 +582,16 @@ function renderStrategyTable(data) {
             <td>
                 <span class="${getProfitClass(item.daily_change_pct || 0)}">
                     ${(item.daily_change_pct || 0) >= 0 ? '+' : ''}${(item.daily_change_pct || 0).toFixed(2)}%
+                </span>
+            </td>
+            <td>
+                <span class="${getProfitClass(dailyProfit)}">
+                    ${formatMoney(dailyProfit)}
+                </span>
+            </td>
+            <td>
+                <span class="${getProfitClass(monthlyProfit)}">
+                    ${formatMoney(monthlyProfit)}
                 </span>
             </td>
             <td>${factorsDisplay}</td>
@@ -403,7 +688,9 @@ function sortStrategyData(column, direction) {
         '近一年策略收益率': 'profit_pct',
         '近一年股票涨幅率': 'benchmark_return',
         '持仓': 'positions_used',
-        '当日涨幅': 'daily_change_pct'
+        '当日涨幅': 'daily_change_pct',
+        '当日盈亏': 'daily_profit',
+        '本月盈亏': 'monthly_profit'
     };
 
     const field = columnMap[column];
@@ -454,36 +741,36 @@ function updateDailyProfit(data) {
     const totalProfitEl = document.getElementById('dailyProfitTotal');
     const totalProfitPctEl = document.getElementById('dailyProfitPct');
     const detailsEl = document.getElementById('dailyProfitDetails');
-    const yesterdayTotalPositionsEl = document.getElementById('yesterdayTotalPositions');
-    const yesterdayTotalInvestmentEl = document.getElementById('yesterdayTotalInvestment');
+    const backendTotalPositionsEl = document.getElementById('yesterdayTotalPositions');
+    const backendTotalInvestmentEl = document.getElementById('yesterdayTotalInvestment');
 
     if (!panel || !totalProfitEl || !detailsEl) return;
 
     // 计算总收益和总仓位
     let totalProfit = 0;
     let totalInvestment = 0;  // 总投资（用于计算收益率）
-    let yesterdayTotalPositions = 0;  // 昨日总仓位
+    let backendTotalPositions = 0;  // 后端持仓总仓位
 
     // 为每个ETF计算今日收益
     const profitItems = data.map(item => {
         const dailyProfit = item.daily_profit || 0;
         const dailyChangePct = item.daily_change_pct || 0;
-        const yesterdayPositions = item.latest_data?.previous_positions_used || 0;  // 使用昨日持仓
-        const investment = yesterdayPositions * 200;  // 每仓200元
+        const backendPositions = item.db_position !== undefined ? item.db_position : 0;
+        const investment = backendPositions * 200;  // 每仓200元
         totalProfit += dailyProfit;
         totalInvestment += investment;
-        yesterdayTotalPositions += yesterdayPositions;
+        backendTotalPositions += backendPositions;
 
         return {
             code: item.code,
             name: item.name,
             profit: dailyProfit,
             changePct: dailyChangePct,
-            positions: yesterdayPositions
+            positions: backendPositions
         };
     });
 
-    // 过滤出有收益或昨日有持仓的ETF
+    // 过滤出后端有持仓的ETF
     const activeItems = profitItems.filter(item => item.positions > 0);
 
     if (activeItems.length === 0) {
@@ -493,9 +780,9 @@ function updateDailyProfit(data) {
 
     panel.style.display = 'block';
 
-    // 更新昨日总仓位和总资金
-    yesterdayTotalPositionsEl.textContent = `${yesterdayTotalPositions}仓`;
-    yesterdayTotalInvestmentEl.textContent = `¥${totalInvestment.toLocaleString()}`;
+    // 更新后端总仓位和总资金
+    backendTotalPositionsEl.textContent = `${backendTotalPositions}仓`;
+    backendTotalInvestmentEl.textContent = `¥${totalInvestment.toLocaleString()}`;
 
     // 更新总收益
     const profitClass = totalProfit >= 0 ? 'positive' : 'negative';
@@ -518,7 +805,7 @@ function updateDailyProfit(data) {
                 <span class="etf-name">${item.code} ${item.name}</span>
                 <span class="etf-info" style="display: flex; align-items: center; gap: 10px;">
                     <span class="etf-profit ${profitClass}">${profitStr}</span>
-                    <span class="etf-change">${item.positions}仓(昨日) · ${changeStr}</span>
+                    <span class="etf-change">${item.positions}仓(后端) · ${changeStr}</span>
                 </span>
             </div>
         `;

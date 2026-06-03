@@ -74,6 +74,13 @@ class MACDSignalGenerator:
 
             # MACD柱量能衰竭提前入场（默认关闭，0=关闭，0.5=缩到一半触发）
             'entry_ratio': 0,
+
+            # ===== MACD 收敛预判（金叉/死叉前提前行动）=====
+            'enable_pre_cross': False,          # 启用 DIF-DEA 收敛预判
+            'pre_cross_gap_imminent': 0.0015,   # 即将交叉阈值 (gap/price < 0.15%)
+            'pre_cross_gap_close': 0.0040,      # 接近交叉阈值 (gap/price < 0.40%)
+            'pre_cross_gap_near': 0.0080,       # 靠近交叉阈值 (gap/price < 0.80%)
+            'pre_cross_confirm_converge': True,  # 要求gap在缩小（收敛确认）
         }
 
     def generate_signals(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -123,6 +130,7 @@ class MACDSignalGenerator:
         df = self._special_patterns(df)
         df = self._divergence_signals(df)
         df = self._histogram_exhaustion_signals(df)
+        df = self._convergence_pre_signals(df)
         df = self._crossover_signals(df)
         df = self._ma60_filter_signals(df)
 
@@ -283,6 +291,104 @@ class MACDSignalGenerator:
         df.loc[early_sell, 'signal_reason'] = '柱量能衰竭(预判死叉)'
 
         df.drop(columns=['_hist_ratio'], inplace=True)
+        return df
+
+    def _convergence_pre_signals(self, df: pd.DataFrame) -> pd.DataFrame:
+        """DIF-DEA 收敛速度预判信号
+
+        不只判断 gap 是否在缩小，而是用收敛速度估算「还有几天交叉」。
+        只有预计 1-3 天内会交叉才触发，避免假信号（gap 缩了 10 天但不交叉）。
+        """
+        if not self.params.get('enable_pre_cross', False):
+            return df
+
+        require_converge = self.params.get('pre_cross_confirm_converge', True)
+        zero_filter = self.params.get('zero_axis_filter', True)
+
+        dif = df['macd_dif'].values
+        dea = df['macd_dea'].values
+        close = df['close'].values
+        n = len(dif)
+
+        gap = dif - dea
+        abs_gap = np.abs(gap)
+        gap_pct = abs_gap / close
+
+        # Convergence speed: how much did the gap shrink from yesterday?
+        gap_change = np.abs(np.roll(gap, 1)) - abs_gap  # positive = converging
+        if n > 0:
+            gap_change[0] = 0
+
+        # Days to cross estimate: gap_pct / daily_convergence_rate
+        daily_rate = gap_change / close
+        # Smooth the rate to avoid noise
+        daily_rate_smooth = pd.Series(daily_rate).rolling(3, min_periods=1).mean().values
+        # Avoid division by zero
+        safe_rate = np.where(daily_rate_smooth > 1e-8, daily_rate_smooth, 1e-8)
+        est_days = gap_pct / safe_rate
+
+        # Require convergence for at least 2 days (more reliable)
+        converging_2d = (gap_change > 1e-6) & (np.roll(gap_change, 1) > 1e-6)
+        if n > 0:
+            converging_2d[0] = False
+
+        if require_converge:
+            in_zone = converging_2d & (est_days < 5)  # converging AND cross within 5 days
+        else:
+            in_zone = est_days < 5
+
+        # ---------- Pre-Buy: DIF < DEA, approaching golden cross ----------
+        pre_buy_zone = (gap < 0) & in_zone
+
+        # Strength based on estimated days to cross
+        buy_imminent = pre_buy_zone & (est_days < 1.5)   # < 1.5 days → strength 5
+        buy_close = pre_buy_zone & (est_days >= 1.5) & (est_days < 3.0)  # strength 3
+        buy_near = pre_buy_zone & (est_days >= 3.0)  # strength 1
+
+        # ---------- Pre-Sell: DIF > DEA, approaching death cross ----------
+        pre_sell_zone = (gap > 0) & in_zone
+
+        sell_imminent = pre_sell_zone & (est_days < 1.5)
+        sell_close = pre_sell_zone & (est_days >= 1.5) & (est_days < 3.0)
+        sell_near = pre_sell_zone & (est_days >= 3.0)
+
+        # Only overwrite HOLD or weaker signals
+        no_strong_signal = (
+            (df['signal_type'] == 'HOLD') |
+            (df['signal_strength'].abs() < 5)
+        )
+
+        df = df.copy()
+
+        # Zero-axis filter for buys
+        if zero_filter:
+            buy_imminent = buy_imminent & (dif > 0)
+            buy_close = buy_close & (dif > 0)
+            buy_near = buy_near & (dif > 0)
+
+        # Apply pre-buy
+        df.loc[buy_imminent & no_strong_signal, 'signal_type'] = 'BUY'
+        df.loc[buy_imminent & no_strong_signal, 'signal_strength'] = 5
+        df.loc[buy_imminent & no_strong_signal, 'signal_reason'] = '速度预判(即将金叉)'
+
+        df.loc[buy_close & no_strong_signal, 'signal_type'] = 'BUY'
+        df.loc[buy_close & no_strong_signal, 'signal_strength'] = 3
+        df.loc[buy_close & no_strong_signal, 'signal_reason'] = '速度预判(接近金叉)'
+
+        df.loc[buy_near & no_strong_signal, 'signal_type'] = 'BUY'
+        df.loc[buy_near & no_strong_signal, 'signal_strength'] = 1
+        df.loc[buy_near & no_strong_signal, 'signal_reason'] = '速度预判(靠近金叉)'
+
+        # Pre-sell: asymmetric — only trigger imminent (avoid early exit)
+        df.loc[sell_imminent & no_strong_signal, 'signal_type'] = 'SELL'
+        df.loc[sell_imminent & no_strong_signal, 'signal_strength'] = -3
+        df.loc[sell_imminent & no_strong_signal, 'signal_reason'] = '速度预判(即将死叉)'
+
+        # Close sell: very weak signal
+        df.loc[sell_close & no_strong_signal & (df['signal_strength'].abs() < 2), 'signal_type'] = 'SELL'
+        df.loc[sell_close & no_strong_signal & (df['signal_strength'].abs() < 2), 'signal_strength'] = -1
+        df.loc[sell_close & no_strong_signal & (df['signal_strength'].abs() < 2), 'signal_reason'] = '速度预判(接近死叉)'
+
         return df
 
     def _crossover_signals(self, df: pd.DataFrame) -> pd.DataFrame:

@@ -9,6 +9,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi import Request
 from starlette.middleware.sessions import SessionMiddleware
 from typing import Optional, List
+from datetime import datetime, time
 import sys
 import os
 import logging
@@ -16,6 +17,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import config
 from core.database import get_etf_info
+from core.profit_calculator import (
+    calculate_daily_profit as _shared_calculate_daily_profit,
+    calculate_monthly_profit_from_rows as _shared_calculate_monthly_profit_from_rows,
+    calculate_slot_profit_series as _shared_calculate_slot_profit_series,
+    normalize_trade_date as _shared_normalize_trade_date,
+)
 from core.auth import router as auth_router, require_auth
 from api.data_service import (
     DataServiceAuthError,
@@ -26,6 +33,122 @@ from api.data_service import (
 app = FastAPI(title=config.API_TITLE, version=config.API_VERSION)
 logger = logging.getLogger(__name__)
 app.add_exception_handler(DataServiceAuthError, data_service_auth_exception_handler)
+
+POSITION_GRID_LOCK_TIME = time(15, 5)
+
+
+def _is_after_position_grid_lock_time(now=None) -> bool:
+    now = now or datetime.now()
+    return now.time() >= POSITION_GRID_LOCK_TIME
+
+
+def _can_recompute_position_grid(
+    refresh: bool = False,
+    realtime: bool = False,
+    cached: Optional[dict] = None,
+    now=None,
+) -> bool:
+    """Whitelist conditions that may change the homepage position grid."""
+    if cached and _is_after_position_grid_lock_time(now):
+        return False
+    if realtime:
+        return True
+    if refresh:
+        return True
+    return cached is None
+
+
+def _cached_batch_signals_response(cached: dict, data_date: str) -> dict:
+    from core.position_manager import get_all_positions
+
+    db_positions = {p['etf_code']: p for p in get_all_positions()}
+    for r in cached.get('data', []):
+        db = db_positions.get(r.get('code', ''), {})
+        r['db_position'] = db.get('current_positions', 0)
+        r['db_shares'] = db.get('total_shares', 0)
+        r['db_avg_cost'] = db.get('avg_cost', 0)
+        if 'monthly_profit' not in r:
+            r['monthly_profit'] = calculate_monthly_profit(
+                r.get('code', ''),
+                r.get('data_date') or data_date,
+                r['db_position'],
+            )
+    return {
+        'success': True,
+        'data': cached.get('data', []),
+        'count': cached.get('count', 0),
+        'cached': True,
+        'data_date': data_date
+    }
+
+
+def _normalize_trade_date(value) -> str:
+    return _shared_normalize_trade_date(value)
+
+
+def _calculate_monthly_profit_from_rows(
+    daily_rows,
+    snapshot_positions,
+    fallback_positions: int = 0,
+    data_date: str = '',
+) -> float:
+    return _shared_calculate_monthly_profit_from_rows(
+        daily_rows=daily_rows,
+        snapshot_positions=snapshot_positions,
+        fallback_positions=fallback_positions,
+        data_date=data_date,
+    )
+
+
+def _calculate_slot_profit_series(
+    daily_rows,
+    snapshot_positions,
+    fallback_positions: int = 0,
+    start_date: str = '',
+) -> list:
+    return _shared_calculate_slot_profit_series(
+        daily_rows=daily_rows,
+        snapshot_positions=snapshot_positions,
+        fallback_positions=fallback_positions,
+        start_date=start_date,
+    )
+
+
+def _get_position_snapshots_for_profit(etf_code: str, data_date: str) -> dict:
+    from core.position_manager import _get_conn
+
+    cutoff = _normalize_trade_date(data_date)
+    if not cutoff:
+        return {}
+
+    conn = _get_conn()
+    rows = conn.execute(
+        """
+        SELECT trade_date, positions
+        FROM position_snapshots
+        WHERE etf_code = ? AND trade_date <= ?
+        ORDER BY trade_date
+        """,
+        (etf_code, cutoff),
+    ).fetchall()
+    conn.close()
+    return {row['trade_date']: row['positions'] for row in rows}
+
+
+def calculate_monthly_profit(etf_code: str, data_date: str, fallback_positions: int = 0) -> float:
+    try:
+        from core.database import get_etf_daily_data
+
+        daily_rows = get_etf_daily_data(etf_code)
+        snapshots = _get_position_snapshots_for_profit(etf_code, data_date)
+        return _calculate_monthly_profit_from_rows(
+            daily_rows=daily_rows,
+            snapshot_positions=snapshots,
+            fallback_positions=fallback_positions,
+            data_date=data_date,
+        )
+    except Exception:
+        return 0.0
 
 # 导入必要的模块
 from starlette.responses import JSONResponse, Response
@@ -239,10 +362,6 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
     from core.watchlist import load_watchlist, calculate_realtime_signal
     from core.database import get_batch_cache, set_batch_cache, get_latest_data_date, clear_batch_cache
 
-    # 如果是实时模式，强制清除缓存
-    if realtime:
-        clear_batch_cache()
-
     # 获取最新数据日期
     data_date = get_latest_data_date()
     if not data_date:
@@ -253,25 +372,14 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
 
     start_date_str = config.DEFAULT_START_DATE
     cache_data_date = f"{data_date}_{start_date_str}"
+    cached = get_batch_cache('signals', cache_data_date)
 
-    # 如果不强制刷新且不是实时模式，尝试从缓存获取
-    if not refresh and not realtime:
-        cached = get_batch_cache('signals', cache_data_date)
-        if cached:
-            from core.position_manager import get_all_positions
-            db_positions = {p['etf_code']: p for p in get_all_positions()}
-            for r in cached.get('data', []):
-                db = db_positions.get(r.get('code', ''), {})
-                r['db_position'] = db.get('current_positions', 0)
-                r['db_shares'] = db.get('total_shares', 0)
-                r['db_avg_cost'] = db.get('avg_cost', 0)
-            return {
-                'success': True,
-                'data': cached.get('data', []),
-                'count': cached.get('count', 0),
-                'cached': True,
-                'data_date': data_date
-            }
+    if not _can_recompute_position_grid(refresh=refresh, realtime=realtime, cached=cached):
+        return _cached_batch_signals_response(cached, data_date)
+
+    # 如果是实时模式且白名单允许重算，强制清除缓存
+    if realtime:
+        clear_batch_cache()
 
     # 缓存不存在或需要刷新，重新计算
     watchlist = load_watchlist()
@@ -322,7 +430,12 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
                 yesterday_positions = pos.get('current_positions', 0)
         except Exception:
             yesterday_positions = 0
-        daily_profit = yesterday_positions * 200 * (daily_change_pct / 100)
+        daily_profit = _shared_calculate_daily_profit(yesterday_positions, daily_change_pct)
+        monthly_profit = calculate_monthly_profit(
+            etf_code,
+            signal_data.get('latest_date', data_date),
+            yesterday_positions,
+        )
 
         # 提取 KDJ 数据
         kdj_k = latest_data.get('kdj_k', 0)
@@ -411,6 +524,7 @@ async def get_batch_signals(refresh: bool = False, realtime: bool = False):
             'price': latest_data.get('close', 0),
             'daily_change_pct': daily_change_pct,  # 当日涨幅
             'daily_profit': daily_profit,  # 今日收益
+            'monthly_profit': monthly_profit,  # 本月收益
             'latest_data': latest_data,  # 添加完整的 latest_data（包含 previous_positions_used）
             'position_value': etf.get('position_value', 0),
             'data_date': signal_data.get('latest_date', data_date),  # 该ETF的数据更新日期
@@ -754,9 +868,10 @@ async def get_all_etfs_daily_profit(start_date: Optional[str] = config.DEFAULT_S
 
     返回所有ETF每天的总收益/亏损金额、仓位变化、累计收益曲线
     """
-    from core.watchlist import load_watchlist, run_backtest
+    from core.watchlist import load_watchlist
+    from core.database import get_etf_daily_data
+    from core.position_manager import get_position
     from collections import defaultdict
-    from datetime import datetime
 
     watchlist = load_watchlist()
     etfs = watchlist.get('etfs', [])
@@ -775,23 +890,26 @@ async def get_all_etfs_daily_profit(start_date: Optional[str] = config.DEFAULT_S
 
     for etf in etfs:
         etf_code = etf['code']
-        strategy = etf.get('strategy', 'macd_aggressive')
-        initial_capital = etf.get('initial_capital', 2000)
 
         try:
-            # 获取该ETF的回测数据
-            result = run_backtest(etf_code, start_date, strategy)
-
-            if not result['success'] or not result.get('data'):
+            daily_rows = get_etf_daily_data(etf_code, start_date=start_date)
+            if not daily_rows:
                 continue
 
-            performance = result['data'].get('performance', [])
-            if not performance or len(performance) == 0:
-                continue
+            current_position = 0
+            pos = get_position(etf_code)
+            if pos:
+                current_position = pos.get('current_positions', 0)
 
-            # 处理每天的回测数据
-            for i in range(len(performance)):
-                p = performance[i]
+            snapshots = _get_position_snapshots_for_profit(etf_code, '99999999')
+            profit_series = _calculate_slot_profit_series(
+                daily_rows=daily_rows,
+                snapshot_positions=snapshots,
+                fallback_positions=current_position,
+                start_date=start_date,
+            )
+
+            for p in profit_series:
                 date_str = str(p['date'])
 
                 # 初始化该日期的数据
@@ -803,22 +921,12 @@ async def get_all_etfs_daily_profit(start_date: Optional[str] = config.DEFAULT_S
                         'active_etf_count': 0
                     }
 
-                # 计算单日收益（使用实际的portfolio_value，而不是假设等于initial_capital）
-                curr_value = p.get('portfolio_value', initial_capital)
-                if i == 0:
-                    # 第一天收益为0，但current_value使用实际的portfolio_value
-                    daily_profit = 0
-                    current_value = curr_value
-                else:
-                    prev_value = performance[i-1].get('portfolio_value', initial_capital)
-                    daily_profit = curr_value - prev_value
-                    current_value = curr_value
-
-                positions_used = p.get('positions_used', 0)
+                daily_profit = p.get('daily_profit', 0)
+                positions_used = p.get('positions', 0)
 
                 daily_data_map[date_str]['total_profit'] += daily_profit
                 daily_data_map[date_str]['total_positions'] += positions_used
-                daily_data_map[date_str]['total_value'] += current_value
+                daily_data_map[date_str]['total_value'] += daily_profit
                 daily_data_map[date_str]['active_etfs'].add(etf_code)
                 daily_data_map[date_str]['etf_profits'].append({
                     'code': etf_code,
@@ -828,8 +936,10 @@ async def get_all_etfs_daily_profit(start_date: Optional[str] = config.DEFAULT_S
                 })
 
                 # 累加到时间线数据
-                timeline_data[date_str]['total_value'] += current_value
+                timeline_data[date_str]['total_value'] += daily_profit
                 timeline_data[date_str]['total_positions'] += positions_used
+                if positions_used > 0:
+                    timeline_data[date_str]['active_etf_count'] += 1
 
         except Exception as e:
             print(f"Error processing {etf_code}: {e}")
@@ -859,7 +969,7 @@ async def get_all_etfs_daily_profit(start_date: Optional[str] = config.DEFAULT_S
         })
 
         # 计算累计收益
-        cumulative_value = data['total_value']
+        cumulative_value += data['total_profit']
 
         # 构建时间线数据
         timeline_list.append({
@@ -1626,6 +1736,7 @@ async def configure_macd_optimization_schedule(request: Request):
     Body:
         enabled: bool 是否启用
         time: str 优化时间 "HH:MM"
+        notify_feishu: bool 优化完成后是否发送飞书操作建议
     """
     try:
         from core.data_update_scheduler import get_scheduler
@@ -1634,17 +1745,20 @@ async def configure_macd_optimization_schedule(request: Request):
         data = await request.json()
         enabled = data.get('enabled', False)
         opt_time = data.get('time', '23:00')
+        notify_feishu = data.get('notify_feishu', False)
 
         if not scheduler.set_macd_optimization_time(opt_time):
             raise HTTPException(status_code=400, detail='无效的时间格式，请使用 HH:MM 格式')
 
         scheduler.set_macd_optimization_enabled(enabled)
+        scheduler.set_macd_optimization_notify_feishu(bool(notify_feishu))
 
         if not config.update_config({
             'macd_optimization_schedule': {
                 'enabled': enabled,
                 'time': opt_time,
-                'lookback_days': 365
+                'lookback_days': 365,
+                'notify_feishu': bool(notify_feishu)
             }
         }):
             raise HTTPException(status_code=500, detail='保存MACD优化调度配置失败')

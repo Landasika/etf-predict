@@ -75,7 +75,8 @@ DEFAULT_CONFIG = {
     "macd_optimization_schedule": {
         "enabled": False,
         "time": DEFAULT_MACD_OPTIMIZATION_TIME,
-        "lookback_days": 365
+        "lookback_days": 365,
+        "notify_feishu": False
     },
     "strategies": {
         "macd_aggressive": "MACD激进策略",

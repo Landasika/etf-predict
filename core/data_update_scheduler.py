@@ -72,6 +72,7 @@ class DataUpdateScheduler:
         # MACD参数优化定时任务配置
         self.macd_optimization_enabled = False
         self.macd_optimization_time = config.DEFAULT_MACD_OPTIMIZATION_TIME
+        self.macd_optimization_notify_feishu = False
         self.macd_optimization_status = {
             'is_running': False,
             'last_run': None,
@@ -134,6 +135,9 @@ class DataUpdateScheduler:
         if not self.set_macd_optimization_time(opt_time):
             self.set_macd_optimization_time(config.DEFAULT_MACD_OPTIMIZATION_TIME)
         self.set_macd_optimization_enabled(bool(macd_opt_schedule.get('enabled', False)))
+        self.set_macd_optimization_notify_feishu(
+            bool(macd_opt_schedule.get('notify_feishu', False))
+        )
 
         # 实时更新器配置
         realtime_enabled = bool(realtime_schedule.get('enabled', False))
@@ -282,6 +286,11 @@ class DataUpdateScheduler:
         logger.info(f"MACD参数优化定时任务已{'启用' if enabled else '禁用'}")
         self._sync_scheduler_state()
 
+    def set_macd_optimization_notify_feishu(self, enabled: bool):
+        """启用/禁用MACD参数优化完成后的飞书通知"""
+        self.macd_optimization_notify_feishu = enabled
+        logger.info(f"MACD参数优化后飞书通知已{'启用' if enabled else '禁用'}")
+
     def _send_feishu_notification(self):
         """发送飞书消息任务"""
         logger.info("=" * 60)
@@ -396,6 +405,13 @@ class DataUpdateScheduler:
             )
             self.macd_optimization_status['message'] = '优化完成'
             logger.info("✅ MACD参数优化任务完成: %s", self.macd_optimization_status['last_result'])
+
+            if (
+                self.macd_optimization_notify_feishu
+                and self.macd_optimization_status['completed_etfs'] > 0
+            ):
+                logger.info("📱 MACD参数优化完成，开始发送飞书操作建议")
+                self._send_feishu_notification()
 
         except Exception as e:
             logger.error(f"❌ MACD参数优化任务失败: {e}")
@@ -589,6 +605,7 @@ class DataUpdateScheduler:
             'macd_optimization': {
                 'enabled': self.macd_optimization_enabled,
                 'time': self.macd_optimization_time,
+                'notify_feishu': self.macd_optimization_notify_feishu,
                 'status': self.macd_optimization_status.copy()
             }
         }

@@ -10,6 +10,7 @@ from datetime import datetime
 
 from core.database import get_etf_connection
 from core.watchlist import load_watchlist
+from core.profit_calculator import calculate_daily_profit
 import config
 
 
@@ -32,6 +33,7 @@ class ETFOperationReport:
         try:
             from core.watchlist import calculate_realtime_signal
             from core.database import get_etf_daily_data
+            from core.position_manager import get_position
 
             print("✓ 直接调用内部函数获取数据")
 
@@ -53,7 +55,8 @@ class ETFOperationReport:
                         data = signal_result.get('data', {})
                         latest_data = data.get('latest_data', {})
                         current_positions = data.get('positions_used', 0)
-                        previous_positions = latest_data.get('previous_positions_used', 0)
+                        pos = get_position(code)
+                        previous_positions = pos.get('current_positions', 0) if pos else 0
                         today_action = current_positions - previous_positions
                         total_positions = etf.get('total_positions', 10)
 
@@ -69,9 +72,9 @@ class ETFOperationReport:
                         except Exception as e:
                             daily_change_pct = 0.0
 
-                        # 计算今日收益（基于昨日持仓，和API相同的公式）
+                        # 计算今日收益（基于实际持仓，和API相同的公式）
                         yesterday_positions = previous_positions
-                        daily_profit = yesterday_positions * 200 * (daily_change_pct / 100)
+                        daily_profit = calculate_daily_profit(yesterday_positions, daily_change_pct)
 
                         # 和主界面保持一致：今日操作基于持仓变化，而不是涨跌幅
                         action_reason = ''
@@ -338,9 +341,8 @@ class ETFOperationReport:
                 # 使用API返回的daily_profit（如果有的话）
                 daily_profit = data.get('daily_profit', 0)
                 if daily_profit == 0:
-                    # 如果API没有返回，手动计算
                     pct_chg = data.get('pct_chg') or 0
-                    daily_profit = investment * (pct_chg / 100)
+                    daily_profit = calculate_daily_profit(previous_positions_used, pct_chg)
 
                 total_return += daily_profit
 

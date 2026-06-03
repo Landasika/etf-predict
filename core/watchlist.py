@@ -3,6 +3,7 @@
 策略类型：
 - macd_aggressive: MACD激进策略（基于MACD金叉死叉，激进止损止盈）
 - macd_aggressive_entry: MACD激进+柱衰竭提前入场（柱量能衰竭预判提前轻仓入场，分批建仓）
+- macd_histogram_momentum: MACD量能柱动量策略（柱体方向、加速度和波动率分层动态仓位）
 """
 
 import json
@@ -52,6 +53,14 @@ STRATEGY_TYPES = {
     'macd_aggressive_entry': {
         'name': 'MACD激进+柱衰竭提前入场',
         'description': 'MACD金叉死叉 + 柱量能衰竭预判提前轻仓入场，分批建仓'
+    },
+    'macd_histogram_momentum': {
+        'name': 'MACD量能柱动量策略',
+        'description': '基于MACD柱体方向、加速度和波动率分层，0-10格动态仓位管理'
+    },
+    'macd_pre_cross': {
+        'name': 'MACD智能预判策略',
+        'description': '基于DIF-DEA收敛度提前预判金叉死叉，越接近交叉信号越强，减少滞后'
     }
 }
 
@@ -477,6 +486,7 @@ def calculate_realtime_signal(etf_code: str, start_date: str = '20250101', strat
                     'total_positions': etf.get('total_positions', 10),
                     'build_position_date': etf.get('build_position_date', None),
                     'optimized_macd_params': etf.get('optimized_macd_params', None),
+                    'optimized_histogram_params': etf.get('optimized_histogram_params', None),
                     'optimized_params': etf.get('optimized_params', None)  # 用于macd_kdj_discrete策略
                 }
                 break
@@ -491,17 +501,17 @@ def calculate_realtime_signal(etf_code: str, start_date: str = '20250101', strat
                     'total_positions': etf.get('total_positions', 10),
                     'build_position_date': etf.get('build_position_date', None),
                     'optimized_macd_params': etf.get('optimized_macd_params', None),
+                    'optimized_histogram_params': etf.get('optimized_histogram_params', None),
                     'optimized_params': etf.get('optimized_params', None)  # 用于macd_kdj_discrete策略
                 }
                 break
 
     # 根据策略类型调用不同的计算函数
-    if strategy == 'macd_aggressive':
-        # MACD激进策略
+    if strategy in ('macd_aggressive', 'macd_aggressive_entry', 'macd_pre_cross'):
+        # MACD类策略
         return calculate_realtime_signal_macd(etf_code, start_date, etf_settings, strategy)
-    elif strategy == 'macd_aggressive_entry':
-        # MACD激进+柱衰竭提前入场
-        return calculate_realtime_signal_macd(etf_code, start_date, etf_settings, strategy)
+    elif strategy == 'macd_histogram_momentum':
+        return calculate_realtime_signal_histogram(etf_code, start_date, etf_settings)
     else:
         return {
             'success': False,
@@ -589,6 +599,10 @@ def run_macd_backtest_with_settings(etf_code: str, start_date: str, strategy: st
         # 柱衰竭提前入场策略
         if strategy == 'macd_aggressive_entry':
             strategy_params['entry_ratio'] = 0.5
+
+        # 收敛预判策略
+        if strategy == 'macd_pre_cross':
+            strategy_params['enable_pre_cross'] = True
 
         # 运行回测
         try:
@@ -883,6 +897,220 @@ def run_macd_backtest(etf_code: str, start_date: str = '20250101', strategy: str
                                             optimized_macd_params=optimized_macd_params)
 
 
+def run_histogram_backtest_with_settings(etf_code: str, start_date: str,
+                                         initial_capital: int = 2000, num_positions: int = 10,
+                                         build_date: str = None,
+                                         optimized_histogram_params: Dict = None) -> Dict:
+    """运行MACD量能柱动量策略回测（带参数）。"""
+    try:
+        from strategies.macd_histogram_momentum import MACDHistogramMomentumSignalGenerator
+        from strategies.macd_histogram_momentum_backtester import MACDHistogramMomentumBacktester
+    except ImportError as e:
+        return {
+            'success': False,
+            'message': f'无法导入MACD量能柱策略模块: {e}',
+            'data': None
+        }
+
+    data = get_etf_daily_data(etf_code, start_date)
+    if not data or len(data) < 60:
+        return {
+            'success': False,
+            'message': f'数据不足（至少需要60天，当前有{len(data) if data else 0}天）',
+            'data': None
+        }
+
+    df = pd.DataFrame(data)
+    if 'trade_date' in df.columns and 'date' not in df.columns:
+        df = df.rename(columns={'trade_date': 'date'})
+    df = df.sort_values('date').reset_index(drop=True)
+
+    signal_params = dict(optimized_histogram_params or {})
+    signal_df = MACDHistogramMomentumSignalGenerator(signal_params).generate_signals(df)
+    execution_df = signal_df.copy()
+    execution_df['target_position'] = execution_df['target_position'].shift(1).fillna(0).astype(int)
+
+    backtester = MACDHistogramMomentumBacktester(
+        initial_capital=initial_capital,
+        num_positions=num_positions,
+        sell_fee=0.005,
+        stop_loss_pct=0.05,
+        take_profit_pct1=0.10,
+        take_profit_pct2=0.20
+    )
+    trades, performance_df = backtester._execute_trades(execution_df)
+    metrics = backtester._calculate_metrics(trades, performance_df, execution_df)
+
+    return _format_histogram_backtest_result(
+        etf_code=etf_code,
+        strategy='macd_histogram_momentum',
+        signal_df=execution_df,
+        trades=trades,
+        performance=performance_df,
+        metrics=metrics,
+        initial_capital=initial_capital,
+        build_date=build_date
+    )
+
+
+def _format_histogram_backtest_result(etf_code: str, strategy: str, signal_df: pd.DataFrame,
+                                      trades: List[Dict], performance: pd.DataFrame,
+                                      metrics: Dict, initial_capital: int,
+                                      build_date: str = None) -> Dict:
+    if performance is None or len(performance) == 0:
+        return {
+            'success': False,
+            'message': '回测数据格式错误',
+            'data': None
+        }
+
+    if build_date:
+        build_date_int = int(build_date)
+        performance = performance[
+            performance['date'].astype(str).str.replace('-', '').astype(int) >= build_date_int
+        ].reset_index(drop=True)
+        trades = [
+            t for t in trades
+            if int(str(t['date']).replace('-', '')) >= build_date_int
+        ]
+        if len(performance) == 0:
+            return {
+                'success': False,
+                'message': '建仓日期后无数据',
+                'data': None
+            }
+        initial_capital = float(performance.iloc[0]['portfolio_value'])
+        final_value = float(performance.iloc[-1]['portfolio_value'])
+        adjusted_profit = final_value - initial_capital
+        metrics['final_capital'] = final_value
+        metrics['total_return_pct'] = (adjusted_profit / initial_capital) * 100 if initial_capital > 0 else 0
+        metrics['build_position_date'] = build_date
+        metrics['total_trades'] = len(trades)
+
+    dates = performance['date'].astype(str).tolist()
+    prices = performance['price'].tolist()
+    volumes = performance['vol'].tolist() if 'vol' in performance.columns else []
+    strategy_values = (performance['portfolio_value'] - initial_capital).tolist()
+    initial_price = performance['price'].iloc[0]
+    benchmark_values = [
+        ((price - initial_price) / initial_price * initial_capital)
+        for price in performance['price'].tolist()
+    ]
+    performance_records = performance.to_dict('records')
+
+    latest_positions_used = int(performance.iloc[-1].get('positions_used', 0))
+    previous_positions_used = int(performance.iloc[-2].get('positions_used', 0)) if len(performance) > 1 else 0
+    if latest_positions_used > previous_positions_used:
+        signal_type = 'BUY'
+    elif latest_positions_used < previous_positions_used:
+        signal_type = 'SELL'
+    else:
+        signal_type = 'HOLD'
+
+    latest_signal_row = signal_df.iloc[-1]
+    latest_signal = {
+        'date': dates[-1] if dates else '',
+        'close': prices[-1] if prices else 0,
+        'signal_strength': latest_positions_used,
+        'signal_type': signal_type,
+        'positions_used': latest_positions_used,
+        'previous_positions_used': previous_positions_used,
+        'target_position': latest_positions_used,
+        'macd_dif': float(latest_signal_row.get('macd_dif', 0)),
+        'macd_dea': float(latest_signal_row.get('macd_dea', 0)),
+        'macd_hist': float(latest_signal_row.get('macd_hist', 0)),
+        'macd_dif_dea_diff': float(latest_signal_row.get('macd_dif', 0) - latest_signal_row.get('macd_dea', 0)),
+        'hist_state': latest_signal_row.get('hist_state', ''),
+        'hist_direction': latest_signal_row.get('hist_direction', ''),
+        'hist_acceleration': latest_signal_row.get('hist_acceleration', ''),
+        'annual_volatility': float(latest_signal_row.get('annual_volatility', 0)),
+        'signal_reason': latest_signal_row.get('signal_reason', ''),
+    }
+
+    try:
+        from strategies.indicators import MACDIndicators
+        kdj_df = MACDIndicators.calculate_kdj(signal_df.copy())
+        latest_kdj = kdj_df.iloc[-1]
+        latest_signal.update({
+            'kdj_k': float(latest_kdj.get('kdj_k', 0)),
+            'kdj_d': float(latest_kdj.get('kdj_d', 0)),
+            'kdj_j': float(latest_kdj.get('kdj_j', 0)),
+        })
+    except Exception as e:
+        print(f"计算KDJ指标失败: {e}")
+
+    buy_signals = [
+        {
+            'date': t['date'],
+            'price': t['price'],
+            'positions': t.get('positions_added', 1),
+            'strength': t.get('signal_strength', 0)
+        }
+        for t in trades if t['type'] == 'BUY'
+    ]
+    sell_signals = [
+        {
+            'date': t['date'],
+            'price': t['price'],
+            'reason': t.get('reason', 'SIGNAL'),
+            'strength': t.get('signal_strength', 0),
+            'positions_closed': t.get('positions_closed', 0)
+        }
+        for t in trades if t['type'] == 'SELL'
+    ]
+
+    final_capital = float(metrics.get('final_capital', performance.iloc[-1]['portfolio_value']))
+    profit = final_capital - initial_capital
+    result = {
+        'success': True,
+        'data': {
+            'latest_date': latest_signal['date'],
+            'position_value': final_capital,
+            'profit': profit,
+            'profit_pct': metrics.get('total_return_pct', 0),
+            'positions_used': latest_positions_used,
+            'signal_strength': latest_signal['signal_strength'],
+            'next_action': _generate_next_action(latest_positions_used, latest_signal, strategy),
+            'latest_data': latest_signal,
+            'backtest_summary': {
+                'trades': metrics.get('total_trades', 0),
+                'buy_hold_return_pct': metrics.get('buy_hold_return_pct', 0),
+                'max_drawdown': metrics.get('max_drawdown', 0),
+                'win_rate': metrics.get('win_rate', 0),
+                'sharpe_ratio': metrics.get('sharpe_ratio', 0),
+                'initial_capital': initial_capital,
+                'build_position_date': build_date
+            },
+            'dates': dates,
+            'prices': prices,
+            'volumes': volumes,
+            'strategy_values': strategy_values,
+            'benchmark_values': benchmark_values,
+            'buy_signals': buy_signals,
+            'sell_signals': sell_signals,
+            'performance': performance_records
+        },
+        'strategy': strategy
+    }
+    return clean_nan_values(result)
+
+
+def calculate_realtime_signal_histogram(etf_code: str, start_date: str = '20250101',
+                                        etf_settings: Dict = None) -> Dict:
+    """计算MACD量能柱动量策略的实时信号。"""
+    if etf_settings is None:
+        etf_settings = {}
+
+    return run_histogram_backtest_with_settings(
+        etf_code=etf_code,
+        start_date=start_date,
+        initial_capital=etf_settings.get('initial_capital', 2000),
+        num_positions=etf_settings.get('total_positions', 10),
+        build_date=etf_settings.get('build_position_date', None),
+        optimized_histogram_params=etf_settings.get('optimized_histogram_params', None)
+    )
+
+
 def calculate_realtime_signal_macd(etf_code: str, start_date: str = '20250101', etf_settings: Dict = None, strategy: str = 'macd_aggressive') -> Dict:
     """计算MACD策略的实时信号
 
@@ -938,6 +1166,12 @@ def load_batch_signals_optimized(use_realtime: bool = False) -> list:
             strategy_params['entry_ratio'] = 0.5
 
         if use_realtime:
+            if strategy_type == 'macd_histogram_momentum':
+                signal_result = calculate_realtime_signal(etf_code, config.DEFAULT_START_DATE, strategy_type)
+                if signal_result['success']:
+                    results.append(signal_result)
+                continue
+
             # 实时模式：只计算当天信号（快速）
             from strategies.signals import get_latest_signal_optimized
             signal_data = get_latest_signal_optimized(etf_code, strategy_type, strategy_params)
@@ -1006,18 +1240,25 @@ def run_backtest(etf_code: str, start_date: str = '20250101', strategy: str = No
             strategy = 'macd_aggressive'
 
     # 根据策略类型调用不同的回测函数
-    if strategy == 'macd_aggressive' or strategy == 'macd_aggressive_entry':
-        # MACD激进策略 / MACD激进+柱衰竭提前入场
+    if strategy in ('macd_aggressive', 'macd_aggressive_entry', 'macd_pre_cross'):
+        # MACD类策略（激进/柱衰竭预判/收敛预判）
         return run_macd_backtest(etf_code, start_date, strategy=strategy,
                                   initial_capital=initial_capital,
                                   num_positions=num_positions,
                                   build_date=build_date,
                                   optimized_macd_params=optimized_macd_params)
+    elif strategy == 'macd_histogram_momentum':
+        return run_histogram_backtest_with_settings(
+            etf_code=etf_code,
+            start_date=start_date,
+            initial_capital=initial_capital,
+            num_positions=num_positions,
+            build_date=build_date,
+            optimized_histogram_params=optimized_histogram_params
+        )
     else:
         return {
             'success': False,
             'message': f'不支持的策略类型: {strategy}',
             'data': None
         }
-
-

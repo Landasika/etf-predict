@@ -437,8 +437,8 @@ class RealtimeDataUpdater:
 
             cursor.execute('''
                 INSERT OR REPLACE INTO etf_daily
-                (ts_code, trade_date, open, high, low, close, vol, amount)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (ts_code, trade_date, open, high, low, close, vol, amount, pct_chg)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 ts_code,
                 trade_date,
@@ -447,7 +447,8 @@ class RealtimeDataUpdater:
                 float(data_row['low']),
                 close_price,
                 vol_lots,       # 已转换为"手"
-                amount_thousand  # 已转换为"千元"
+                amount_thousand,  # 已转换为"千元"
+                float(data_row['pct_chg'])  # 涨跌幅百分比
             ))
 
             conn.commit()

@@ -25,7 +25,8 @@ class MACDBacktester:
                  take_profit_pct3: float = 0.35,
                  enable_trailing_stop: bool = False,
                  trailing_stop_pct: float = 0.05,
-                 trailing_stop_activation: float = 0.15):
+                 trailing_stop_activation: float = 0.15,
+                 dynamic_take_profit: bool = False):
         """
         Initialize backtester with optimized T-trading parameters.
 
@@ -40,6 +41,7 @@ class MACDBacktester:
             enable_trailing_stop: Enable trailing stop profit
             trailing_stop_pct: Trailing stop percentage (default 5%)
             trailing_stop_activation: Activation profit for trailing stop (default 15%)
+            dynamic_take_profit: Scale take-profit by ATR volatility
         """
         self.initial_capital = initial_capital
         self.sell_fee = sell_fee
@@ -47,9 +49,14 @@ class MACDBacktester:
         self.num_positions = num_positions
         self.position_size = initial_capital / num_positions  # Each position = ¥200
         self.stop_loss_pct = stop_loss_pct
-        self.take_profit_pct1 = take_profit_pct1  # Sell 30% at level 1
-        self.take_profit_pct2 = take_profit_pct2  # Sell 30% at level 2
-        self.take_profit_pct3 = take_profit_pct3  # Sell 40% at level 3
+        self.base_tp1 = take_profit_pct1
+        self.base_tp2 = take_profit_pct2
+        self.base_tp3 = take_profit_pct3
+        self.take_profit_pct1 = take_profit_pct1
+        self.take_profit_pct2 = take_profit_pct2
+        self.take_profit_pct3 = take_profit_pct3
+        self.dynamic_take_profit = dynamic_take_profit
+        self.atr_baseline = 0.02  # baseline daily ATR% for scaling (2%)
 
         # 追踪止盈参数
         self.enable_trailing_stop = enable_trailing_stop
@@ -225,9 +232,25 @@ class MACDBacktester:
                 'signal_strength': signal_strength
             })
 
+        # Pre-calculate ATR% for dynamic take-profit
+        if self.dynamic_take_profit and 'atr' in data.columns:
+            data['atr_pct'] = data['atr'] / data['close']
+        else:
+            data['atr_pct'] = 0
+
         for idx, row in data.iterrows():
             price = row['close']
             signal_strength = row['signal_strength']
+
+            # Dynamic take-profit: scale thresholds by ATR volatility
+            if self.dynamic_take_profit:
+                atr_pct = row.get('atr_pct', 0)
+                if atr_pct > 0.005:  # if ATR data is valid
+                    scale = atr_pct / self.atr_baseline
+                    scale = max(1.0, min(2.5, scale))  # only scale UP, clamp max 2.5x
+                    self.take_profit_pct1 = self.base_tp1 * scale
+                    self.take_profit_pct2 = self.base_tp2 * scale
+                    self.take_profit_pct3 = self.base_tp3 * scale
 
             # Calculate current P&L percentage
             if position_shares > 0 and avg_cost > 0:

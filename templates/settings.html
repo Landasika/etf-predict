@@ -169,6 +169,42 @@
                 </div>
             </section>
 
+            <!-- MACD 参数优化设置 -->
+            <section class="setting-section">
+                <h2>⚙️ MACD 参数优化</h2>
+
+                <div class="setting-item">
+                    <label class="setting-label">
+                        启用参数优化
+                        <span class="setting-desc">每个工作日按指定时间自动优化策略参数</span>
+                    </label>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="macdOptimizationEnabled">
+                        <label for="macdOptimizationEnabled" class="toggle"></label>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">
+                        优化时间
+                        <span class="setting-desc">建议在收盘后或夜间执行</span>
+                    </label>
+                    <input type="time" id="macdOptimizationTime" class="setting-input" value="23:00">
+                    <span class="setting-hint">默认 23:00</span>
+                </div>
+
+                <div class="setting-item">
+                    <label class="setting-label">
+                        优化完成后发送飞书
+                        <span class="setting-desc">参数更新完成后自动发送最新 ETF 操作建议</span>
+                    </label>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="macdOptimizationNotifyFeishu">
+                        <label for="macdOptimizationNotifyFeishu" class="toggle"></label>
+                    </div>
+                </div>
+            </section>
+
             <!-- 策略默认值 -->
             <section class="setting-section">
                 <h2>📈 策略默认值</h2>
@@ -292,6 +328,6 @@
         </div>
     </div>
 
-    <script src="/static/js/settings.js"></script>
+    <script src="/static/js/settings.js?v=2"></script>
 </body>
 </html>

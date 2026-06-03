@@ -176,6 +176,24 @@ async function loadSettings() {
                 }
             }
 
+            // Load MACD optimization schedule
+            if (config.macd_optimization_schedule) {
+                const macdEnabledCheckbox = document.getElementById('macdOptimizationEnabled');
+                if (macdEnabledCheckbox) {
+                    macdEnabledCheckbox.checked = config.macd_optimization_schedule.enabled || false;
+                }
+
+                const macdTimeInput = document.getElementById('macdOptimizationTime');
+                if (macdTimeInput) {
+                    macdTimeInput.value = config.macd_optimization_schedule.time || '23:00';
+                }
+
+                const macdNotifyCheckbox = document.getElementById('macdOptimizationNotifyFeishu');
+                if (macdNotifyCheckbox) {
+                    macdNotifyCheckbox.checked = config.macd_optimization_schedule.notify_feishu || false;
+                }
+            }
+
             // Load strategy defaults (if strategy config exists)
             if (config.strategy) {
                 const defaultStrategySelect = document.getElementById('defaultStrategy');
@@ -293,9 +311,10 @@ async function saveSettings() {
         });
 
         if (data.success) {
-            showToast('配置已保存');
+            await saveMacdOptimizationSettings();
             await loadDataSourceStatus(); // Refresh status
             await saveFeishuSettings(); // Save Feishu config
+            showToast('配置已保存');
         } else {
             console.error('Failed to save config:', data.message);
             showToast('保存失败: ' + data.message, 'error');
@@ -303,6 +322,29 @@ async function saveSettings() {
     } catch (error) {
         console.error('Error saving config:', error);
         showToast('保存失败: ' + error.message, 'error');
+    }
+}
+
+// Save MACD optimization scheduler settings
+async function saveMacdOptimizationSettings() {
+    const enabled = document.getElementById('macdOptimizationEnabled')?.checked || false;
+    const time = document.getElementById('macdOptimizationTime')?.value || '23:00';
+    const notifyFeishu = document.getElementById('macdOptimizationNotifyFeishu')?.checked || false;
+
+    const data = await fetchAPI('/api/macd/optimization/schedule/configure', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            enabled: enabled,
+            time: time,
+            notify_feishu: notifyFeishu
+        })
+    });
+
+    if (!data.success) {
+        throw new Error(data.message || 'MACD参数优化设置保存失败');
     }
 }
 

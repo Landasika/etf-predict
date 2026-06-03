@@ -46,6 +46,20 @@ def init_tables():
             reason TEXT,
             created_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS position_snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            trade_date TEXT NOT NULL,
+            etf_code TEXT NOT NULL,
+            positions INTEGER NOT NULL DEFAULT 0,
+            avg_cost REAL DEFAULT 0,
+            total_shares INTEGER DEFAULT 0,
+            cash_used REAL DEFAULT 0,
+            source TEXT DEFAULT 'auto_close',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(trade_date, etf_code)
+        );
     """)
     # Migration: add position_date column if missing
     try:
@@ -74,6 +88,55 @@ def get_all_positions() -> List[Dict]:
     rows = conn.execute("SELECT * FROM positions ORDER BY etf_code").fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def snapshot_positions_for_date(
+    trade_date: str,
+    watchlist_etfs: List[Dict],
+    source: str = 'auto_close',
+) -> Dict:
+    """Persist a full daily position snapshot for every watchlist ETF."""
+    positions_by_code = {p['etf_code']: p for p in get_all_positions()}
+    now = datetime.now().isoformat()
+    rows = []
+    seen_codes = set()
+
+    for etf in watchlist_etfs:
+        code = etf.get('code')
+        if not code or code in seen_codes:
+            continue
+        seen_codes.add(code)
+        position = positions_by_code.get(code, {})
+        rows.append((
+            trade_date,
+            code,
+            position.get('current_positions', 0),
+            position.get('avg_cost', 0),
+            position.get('total_shares', 0),
+            position.get('cash_used', 0),
+            source,
+            now,
+            now,
+        ))
+
+    conn = _get_conn()
+    conn.executemany("""
+        INSERT INTO position_snapshots (
+            trade_date, etf_code, positions, avg_cost, total_shares,
+            cash_used, source, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(trade_date, etf_code) DO UPDATE SET
+            positions=excluded.positions,
+            avg_cost=excluded.avg_cost,
+            total_shares=excluded.total_shares,
+            cash_used=excluded.cash_used,
+            source=excluded.source,
+            updated_at=excluded.updated_at
+    """, rows)
+    conn.commit()
+    conn.close()
+    return {'date': trade_date, 'snapshots': len(rows)}
 
 
 def upsert_position(etf_code: str, current_positions: int, avg_cost: float = 0,
@@ -185,6 +248,7 @@ def run_auto_sync_all(start_date: str = '20250101'):
         wl = json.load(f)
 
     results = []
+    snapshot_date = None
     for etf in wl.get('etfs', []):
         code = etf['code']
         strategy = etf.get('strategy', 'macd_aggressive')
@@ -195,6 +259,8 @@ def run_auto_sync_all(start_date: str = '20250101'):
                 target = data.get('positions_used', 0)
                 price = data.get('latest_data', {}).get('close', 0)
                 data_date = signal['data'].get('latest_date', '')
+                if data_date:
+                    snapshot_date = max(snapshot_date or data_date, data_date)
                 r = auto_sync_signal(code, target, strategy=strategy,
                                      price=price, data_date=data_date)
                 results.append({'code': code, **r})
@@ -204,12 +270,17 @@ def run_auto_sync_all(start_date: str = '20250101'):
     trades = [r for r in results if r.get('action') in ('BUY', 'SELL')]
     locked = [r for r in results if r.get('action') == 'LOCKED']
     skipped = [r for r in results if r.get('action') == 'SKIPPED']
+    snapshot = snapshot_positions_for_date(
+        snapshot_date or datetime.now().strftime('%Y%m%d'),
+        wl.get('etfs', []),
+    )
     return {
         'success': True,
         'total': len(results),
         'trades': len(trades),
         'locked': len(locked),
         'skipped': len(skipped),
+        'snapshot': snapshot,
         'details': results,
     }
 
