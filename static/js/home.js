@@ -6,6 +6,8 @@ let realtimeEnabled = false;
 let realtimeRefreshInterval = null;
 let realtimeCountdownInterval = null;  // 倒计时定时器
 let nextRefreshTime = null;  // 下次刷新时间
+let positionSlotValue = 0;
+let activeTradeSlotValue = 0;
 
 // API请求辅助函数 - 处理认证和错误
 async function fetchAPI(url, options = {}) {
@@ -193,6 +195,7 @@ async function loadBatchSignals(forceRefresh = false) {
         const result = await fetchAPI(url);
 
         if (result.success) {
+            positionSlotValue = getPositionSlotValue(result);
             strategyData = result.data;
             renderPositionGrid(strategyData);
             renderStrategyTable(strategyData);
@@ -221,6 +224,11 @@ function clampSlotValue(value, fallback = 0) {
         return fallback;
     }
     return Math.max(0, Math.trunc(numberValue));
+}
+
+function getPositionSlotValue(source = {}) {
+    const value = Number(source.slot_value || positionSlotValue);
+    return Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 function escapeHtml(value) {
@@ -577,7 +585,7 @@ function renderStrategyTable(data) {
             <td>
                 <div class="action-buttons">
                     <a href="/macd-watchlist#${item.code}" class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px;">详情</a>
-                    <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px; background: #fef3c7; border-color: #f59e0b; color: #92400e;" onclick="openTradeModal('${item.code}', ${item.db_position || 0}, ${item.positions_used}, ${item.price || 0}, '${item.strategy || 'macd_aggressive'}')">调整</button>
+                    <button class="btn btn-secondary" style="font-size: 11px; padding: 4px 8px; background: #fef3c7; border-color: #f59e0b; color: #92400e;" onclick="openTradeModal('${item.code}', ${item.db_position || 0}, ${item.positions_used}, ${item.price || 0}, '${item.strategy || 'macd_aggressive'}', ${getPositionSlotValue(item)})">调整</button>
                     <button class="btn btn-danger" onclick="removeEtf('${item.code}')">删除</button>
                 </div>
             </td>
@@ -733,7 +741,7 @@ function updateDailyProfit(data) {
         const dailyProfit = item.daily_profit || 0;
         const dailyChangePct = item.daily_change_pct || 0;
         const backendPositions = item.db_position !== undefined ? item.db_position : 0;
-        const investment = backendPositions * 200;  // 每仓200元
+        const investment = backendPositions * getPositionSlotValue(item);
         totalProfit += dailyProfit;
         totalInvestment += investment;
         backendTotalPositions += backendPositions;
@@ -1817,7 +1825,8 @@ async function loadAdvice() {
 }
 
 // ---- 持仓调整 ----
-function openTradeModal(code, dbPos, sigPos, price, strategy) {
+function openTradeModal(code, dbPos, sigPos, price, strategy, slotValue) {
+    activeTradeSlotValue = getPositionSlotValue({ slot_value: slotValue });
     document.getElementById('tradeEtfCode').value = code;
     document.getElementById('tradePrice').value = price || '';
     document.getElementById('tradePosBefore').value = dbPos;
@@ -1837,7 +1846,7 @@ function updateTradePreview() {
     const before = parseInt(document.getElementById('tradePosBefore').value) || 0;
     const after = parseInt(document.getElementById('tradePosAfter').value) || 0;
     const delta = Math.abs(after - before);
-    const amount = delta * 200;
+    const amount = delta * activeTradeSlotValue;
     const shares = price > 0 ? Math.floor(amount / price) : 0;
     const preview = document.getElementById('tradePreview');
     if (delta === 0) {

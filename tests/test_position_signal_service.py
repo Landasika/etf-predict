@@ -75,6 +75,7 @@ def test_build_position_signal_rows_builds_row_with_daily_profit(monkeypatch):
     assert row["daily_change_pct"] == pytest.approx(5.0)
     assert row["daily_profit"] == pytest.approx(3 * 200 * 5.0 / 100)
     assert row["monthly_profit"] == 12.5
+    assert row["slot_value"] == 200
     assert row["db_position"] == 3
     assert row["db_shares"] == 600
     assert row["db_avg_cost"] == 1.2
@@ -113,6 +114,7 @@ def test_build_position_signal_rows_uses_cache_after_lock_even_when_refresh(monk
     assert result["data_date"] == "20260603"
     assert result["data"][0]["code"] == "562360.SH"
     assert result["data"][0]["db_position"] == 4
+    assert result["data"][0]["slot_value"] == 200
     assert result["data"][0]["monthly_profit"] == 9.0
 
 

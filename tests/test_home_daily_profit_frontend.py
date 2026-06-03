@@ -99,6 +99,14 @@ def test_homepage_does_not_expose_macd_optimization_controls():
     assert "/api/watchlist/${etf.code}/macd-params" not in source
 
 
+def test_homepage_uses_backend_slot_value_for_amount_display():
+    source = HOME_JS.read_text(encoding="utf-8")
+
+    assert "getPositionSlotValue" in source
+    assert "* 200" not in source
+    assert "每仓200元" not in source
+
+
 def test_strategy_overview_tabs_default_to_grid_and_can_switch():
     html = INDEX_HTML.read_text(encoding="utf-8")
     source = HOME_JS.read_text(encoding="utf-8")

@@ -4,6 +4,7 @@ from datetime import datetime, time
 import config
 from core import database, position_manager, watchlist
 from core.profit_calculator import (
+    SLOT_VALUE,
     calculate_daily_profit,
     calculate_monthly_profit_from_rows,
     normalize_trade_date,
@@ -112,6 +113,7 @@ def _cached_batch_signals_response(cached: dict, data_date: str) -> dict:
         row['db_position'] = db.get('current_positions', 0)
         row['db_shares'] = db.get('total_shares', 0)
         row['db_avg_cost'] = db.get('avg_cost', 0)
+        row.setdefault('slot_value', SLOT_VALUE)
         if 'monthly_profit' not in row:
             row['monthly_profit'] = calculate_monthly_profit(
                 row.get('code', ''),
@@ -125,6 +127,7 @@ def _cached_batch_signals_response(cached: dict, data_date: str) -> dict:
         'count': cached.get('count', 0),
         'cached': True,
         'data_date': data_date,
+        'slot_value': SLOT_VALUE,
     }
 
 
@@ -298,6 +301,7 @@ def build_position_signal_rows(
             'daily_change_pct': daily_change_pct,
             'daily_profit': daily_profit,
             'monthly_profit': monthly_profit,
+            'slot_value': SLOT_VALUE,
             'latest_data': latest_data,
             'position_value': etf.get('position_value', 0),
             'data_date': signal_data.get('latest_date', data_date),
@@ -317,6 +321,7 @@ def build_position_signal_rows(
         'count': len(results),
         'cached': False,
         'data_date': data_date,
+        'slot_value': SLOT_VALUE,
     }
 
 
