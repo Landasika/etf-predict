@@ -165,6 +165,15 @@ def test_advice_modal_uses_backend_operation_and_actual_holdings():
     assert "positions_used > 0" not in body
 
 
+def test_advice_modal_separates_pending_trades_from_strategy_changes():
+    source = HOME_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "loadAdvice")
+
+    assert "strategy_delta" in body
+    assert "今日策略变化" in body
+    assert "当前实际持仓已与策略目标一致，无待执行调仓" in body
+
+
 def test_position_grid_sort_prioritizes_add_reduce_then_hold():
     source = HOME_JS.read_text(encoding="utf-8")
     body = _function_body(source, "sortPositionGridItems")

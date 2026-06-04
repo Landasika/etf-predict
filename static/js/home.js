@@ -1,5 +1,5 @@
 // 首页策略汇总
-console.log('📝 home.js v91 已加载 - 首页持仓格子');
+console.log('📝 home.js v92 已加载 - 首页持仓格子');
 
 // 实时更新控制
 let realtimeEnabled = false;
@@ -1571,28 +1571,34 @@ async function loadAdvice() {
             signals = getValidPositionGridItems(strategyData);
         }
 
-        const formattedSignals = signals.map(etf => ({
-            code: etf.code,
-            name: etf.name,
-            signal: etf.signal,
-            close: Number(etf.price || 0),
-            macd_dif: Number(etf.macd?.dif || 0),
-            macd_dea: Number(etf.macd?.dea || 0),
-            macd_hist: Number(etf.macd?.hist || 0),
-            signal_strength: Number(etf.signal_strength ?? 0),
-            positions_used: Number(etf.positions_used || 0),
-            total_positions: etf.total_positions || 10,
-            profit_pct: etf.profit_pct,
-            action_reason: etf.action_reason || '',
-            today_action_count: Number(etf.today_action_count || 0),
-            today_operation: etf.today_operation || '',
-            db_position: Number(etf.db_position ?? 0),
-            previous_positions_used: etf.previous_positions_used ?? etf.db_position ?? 0
-        }));
+        const formattedSignals = signals.map(etf => {
+            const movement = getStrategySlotMovement(etf);
+            return {
+                code: etf.code,
+                name: etf.name,
+                signal: etf.signal,
+                close: Number(etf.price || 0),
+                macd_dif: Number(etf.macd?.dif || 0),
+                macd_dea: Number(etf.macd?.dea || 0),
+                macd_hist: Number(etf.macd?.hist || 0),
+                signal_strength: Number(etf.signal_strength ?? 0),
+                positions_used: Number(etf.positions_used || 0),
+                total_positions: etf.total_positions || 10,
+                profit_pct: etf.profit_pct,
+                action_reason: etf.action_reason || '',
+                today_action_count: Number(etf.today_action_count || 0),
+                today_operation: etf.today_operation || '',
+                db_position: Number(etf.db_position ?? 0),
+                previous_positions_used: etf.previous_positions_used ?? etf.db_position ?? 0,
+                strategy_previous_positions: movement.previousSlots,
+                strategy_delta: movement.delta
+            };
+        });
 
         const buySignals = formattedSignals.filter(s => s.today_action_count > 0);
         const sellSignals = formattedSignals.filter(s => s.today_action_count < 0);
         const holdSignals = formattedSignals.filter(s => s.today_action_count === 0);
+        const strategyChanges = formattedSignals.filter(s => s.strategy_delta !== 0);
 
         // 生成建议HTML
         let html = '<div class="advice-container">';
@@ -1699,6 +1705,35 @@ async function loadAdvice() {
                 html += '</tr>';
             });
 
+            html += '</tbody></table></div>';
+        }
+
+        if (buySignals.length === 0 && sellSignals.length === 0) {
+            html += '<div class="advice-section advice-hold">';
+            html += '<h3>✅ 待执行调仓</h3>';
+            html += '<p>当前实际持仓已与策略目标一致，无待执行调仓。</p>';
+            html += '</div>';
+        }
+
+        if (strategyChanges.length > 0) {
+            html += '<div class="advice-section advice-hold">';
+            html += '<h3>📌 今日策略变化 (' + strategyChanges.length + '只)</h3>';
+            html += '<table class="advice-table">';
+            html += '<thead><tr><th>代码</th><th>名称</th><th>策略仓位</th><th>变化</th><th>原因</th></tr></thead>';
+            html += '<tbody>';
+            strategyChanges.forEach(etf => {
+                const changeText = etf.strategy_delta > 0
+                    ? '加仓' + etf.strategy_delta + '仓'
+                    : '减仓' + Math.abs(etf.strategy_delta) + '仓';
+                const changeColor = etf.strategy_delta > 0 ? '#dc2626' : '#16a34a';
+                html += '<tr>';
+                html += '<td>' + etf.code + '</td>';
+                html += '<td>' + etf.name + '</td>';
+                html += '<td>' + etf.strategy_previous_positions + '仓 → ' + etf.positions_used + '仓</td>';
+                html += '<td style="color:' + changeColor + ';font-weight:700;">' + changeText + '</td>';
+                html += '<td>' + (etf.action_reason || '策略信号变化') + '</td>';
+                html += '</tr>';
+            });
             html += '</tbody></table></div>';
         }
 
