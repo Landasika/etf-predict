@@ -151,11 +151,11 @@ def _apply_actual_position_fields(row: dict, db_position: dict, data_date: str) 
         row.get('latest_data', {}),
         target_positions,
     )
-    row['daily_profit'] = calculate_daily_profit(actual_positions, daily_change_pct)
+    row['daily_profit'] = calculate_daily_profit(previous_positions, daily_change_pct)
     row['monthly_profit'] = calculate_monthly_profit(
         row.get('code', ''),
         row_date,
-        actual_positions,
+        previous_positions,
     )
     row['slot_value'] = SLOT_VALUE
 
@@ -298,11 +298,11 @@ def build_position_signal_rows(
             latest_data.get('previous_positions_used', signal_data.get('previous_positions_used', actual_positions)),
             actual_positions,
         )
-        daily_profit = calculate_daily_profit(actual_positions, daily_change_pct)
+        daily_profit = calculate_daily_profit(previous_positions, daily_change_pct)
         monthly_profit = calculate_monthly_profit(
             etf_code,
             signal_data.get('latest_date', data_date),
-            actual_positions,
+            previous_positions,
         )
 
         kdj_k = latest_data.get('kdj_k', 0)

@@ -153,10 +153,10 @@ class ETFOperationReport:
         lines.append("| --- | --- | --- |")
 
         lines.append(f"| 监控ETF | {etf_count}个 | 自选列表总数 |")
-        lines.append(f"| 有持仓ETF | {stats.get('active_etf_count', 0)}个 | 昨日实际有持仓 |")
-        lines.append(f"| 昨日总仓位 | {stats.get('total_positions', 0)}仓 | 实际持仓总和 |")
-        lines.append(f"| 昨日总资金 | ¥{stats.get('total_capital', 0):,.0f} | 持仓总价值（{SLOT_VALUE}元/仓）|")
-        lines.append(f"| 今日总收益 | ¥{stats.get('total_return', 0):+,.2f} | 当日浮动盈亏 |\n")
+        lines.append(f"| 有持仓ETF | {stats.get('active_etf_count', 0)}个 | 昨日持仓不为0 |")
+        lines.append(f"| 昨日总仓位 | {stats.get('total_positions', 0)}仓 | 今日盈亏计算仓位 |")
+        lines.append(f"| 昨日总资金 | ¥{stats.get('total_capital', 0):,.0f} | 昨日仓位 × {SLOT_VALUE}元/仓 |")
+        lines.append(f"| 今日总收益 | ¥{stats.get('total_return', 0):+,.2f} | 按昨日仓位计算 |\n")
 
         # 今日操作建议总结
         lines.append("## 📋 今日操作建议\n")
