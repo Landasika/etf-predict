@@ -55,6 +55,8 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./optimized_weights:/app/optimized_weights
+      # 飞书机器人配置需要持久化，否则容器重建后设置页会丢失
+      - ./conf.json:/app/conf.json
       # config.json 使用环境变量，不挂载
       # 如果需要挂载本地配置，取消下面的注释
       # - ./config.json:/app/config.json:ro

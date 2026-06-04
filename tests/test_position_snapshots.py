@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from datetime import datetime
 
 import pytest
 
@@ -105,6 +106,13 @@ def test_run_auto_sync_all_writes_snapshot_after_signal_sync(
         "core.watchlist.calculate_realtime_signal",
         fake_signal,
     )
+
+    class AfterCloseDatetime:
+        @classmethod
+        def now(cls):
+            return datetime(2026, 6, 3, 15, 10, 0)
+
+    monkeypatch.setattr(position_manager, "datetime", AfterCloseDatetime)
 
     result = position_manager.run_auto_sync_all()
 
