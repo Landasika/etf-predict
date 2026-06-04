@@ -83,6 +83,7 @@ class DataUpdateScheduler:
             'current_etf': '',
             'completed_etfs': 0,
             'failed_etfs': 0,
+            'changed_params': [],
             'message': ''
         }
 
@@ -334,6 +335,46 @@ class DataUpdateScheduler:
         finally:
             self.feishu_notification_status['is_sending'] = False
 
+    def _send_nightly_review_notification(self):
+        """发送夜间复盘飞书消息任务"""
+        logger.info("=" * 60)
+        logger.info("🌙 开始发送夜间复盘飞书消息")
+        logger.info("=" * 60)
+
+        self.feishu_notification_status['is_sending'] = True
+
+        try:
+            from core.feishu_notifier import get_feishu_notifier
+            from core.nightly_review_report import generate_nightly_review_report
+
+            notifier = get_feishu_notifier()
+            markdown_content = generate_nightly_review_report(self.macd_optimization_status)
+
+            if not markdown_content:
+                logger.warning("⚠️  生成夜间复盘失败或无数据")
+                self.feishu_notification_status['last_result'] = '生成夜间复盘失败'
+                return
+
+            import asyncio
+            result = asyncio.run(notifier.send_message(markdown_content, title="🌙 ETF夜间复盘"))
+
+            self.feishu_notification_status['last_send'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            self.feishu_notification_status['last_result'] = '成功' if result else '失败'
+
+            if result:
+                self.feishu_notification_status['success_count'] += 1
+                logger.info("✅ 夜间复盘飞书消息发送成功")
+            else:
+                self.feishu_notification_status['fail_count'] += 1
+                logger.warning("⚠️  夜间复盘飞书消息发送失败")
+
+        except Exception as e:
+            logger.error(f"❌ 夜间复盘飞书消息发送失败: {e}")
+            self.feishu_notification_status['last_result'] = f'失败: {str(e)}'
+            self.feishu_notification_status['fail_count'] += 1
+        finally:
+            self.feishu_notification_status['is_sending'] = False
+
     def _run_macd_optimization(self):
         """执行MACD参数优化任务（遍历所有MACD激进策略ETF）"""
         logger.info("=" * 60)
@@ -344,6 +385,7 @@ class DataUpdateScheduler:
         self.macd_optimization_status['message'] = '正在优化MACD参数...'
         self.macd_optimization_status['completed_etfs'] = 0
         self.macd_optimization_status['failed_etfs'] = 0
+        self.macd_optimization_status['changed_params'] = []
 
         try:
             from strategies.macd_param_optimizer import MACDParamOptimizer
@@ -376,14 +418,24 @@ class DataUpdateScheduler:
 
                     best_params = result['best_params']
                     metrics = result['metrics']
+                    old_params = dict(etf.get('optimized_macd_params') or {})
 
                     # 保存优化结果到watchlist
-                    etf['optimized_macd_params'] = {
+                    new_params = {
                         'macd_fast': best_params['macd_fast'],
                         'macd_slow': best_params['macd_slow'],
                         'macd_signal': best_params['macd_signal']
                     }
+                    etf['optimized_macd_params'] = new_params
                     save_watchlist(watchlist)
+
+                    self.macd_optimization_status['changed_params'].append({
+                        'code': etf_code,
+                        'name': etf_name,
+                        'old_params': old_params,
+                        'new_params': dict(new_params),
+                        'return_pct': metrics['total_return_pct'],
+                    })
 
                     self.macd_optimization_status['completed_etfs'] += 1
                     self.macd_optimization_status['success_count'] += 1
@@ -410,8 +462,8 @@ class DataUpdateScheduler:
                 self.macd_optimization_notify_feishu
                 and self.macd_optimization_status['completed_etfs'] > 0
             ):
-                logger.info("📱 MACD参数优化完成，开始发送飞书操作建议")
-                self._send_feishu_notification()
+                logger.info("📱 MACD参数优化完成，开始发送夜间复盘")
+                self._send_nightly_review_notification()
 
         except Exception as e:
             logger.error(f"❌ MACD参数优化任务失败: {e}")
