@@ -169,6 +169,8 @@ def _apply_env_overrides(config):
         config.setdefault('macd_optimization_schedule', {})['enabled'] = _get_env_bool('MACD_OPTIMIZATION_SCHEDULE_ENABLED')
     if _get_env('MACD_OPTIMIZATION_SCHEDULE_TIME'):
         config.setdefault('macd_optimization_schedule', {})['time'] = _get_env('MACD_OPTIMIZATION_SCHEDULE_TIME')
+    if _get_env('MACD_OPTIMIZATION_NOTIFY_FEISHU') is not None:
+        config.setdefault('macd_optimization_schedule', {})['notify_feishu'] = _get_env_bool('MACD_OPTIMIZATION_NOTIFY_FEISHU')
 
     return config
 
