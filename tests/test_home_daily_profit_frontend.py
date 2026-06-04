@@ -140,7 +140,7 @@ def test_position_grid_delta_uses_strategy_slots_not_today_action_count():
     assert "today_action_count" not in body
 
 
-def test_advice_modal_uses_backend_actual_positions_not_strategy_previous_slots():
+def test_advice_modal_uses_backend_previous_positions_for_today_operation():
     source = HOME_JS.read_text(encoding="utf-8")
     body = _function_body(source, "loadAdvice")
 
@@ -165,13 +165,14 @@ def test_advice_modal_uses_backend_operation_and_actual_holdings():
     assert "positions_used > 0" not in body
 
 
-def test_advice_modal_separates_pending_trades_from_strategy_changes():
+def test_advice_modal_does_not_duplicate_backend_today_operation_as_strategy_changes():
     source = HOME_JS.read_text(encoding="utf-8")
     body = _function_body(source, "loadAdvice")
 
-    assert "strategy_delta" in body
-    assert "今日策略变化" in body
-    assert "当前实际持仓已与策略目标一致，无待执行调仓" in body
+    assert "strategy_delta" not in body
+    assert "今日策略变化" not in body
+    assert "当前实际持仓已与策略目标一致，无待执行调仓" not in body
+    assert "今日信号目标与昨日持仓一致，无需调仓" in body
 
 
 def test_position_grid_sort_prioritizes_add_reduce_then_hold():

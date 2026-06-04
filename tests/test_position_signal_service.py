@@ -45,6 +45,7 @@ def test_build_position_signal_rows_builds_row_with_daily_profit(monkeypatch):
                 "macd_dif": 0.1,
                 "macd_dea": 0.05,
                 "macd_hist": 0.03,
+                "previous_positions_used": 2,
                 "kdj_k": 55,
                 "kdj_d": 50,
                 "kdj_j": 65,
@@ -71,7 +72,9 @@ def test_build_position_signal_rows_builds_row_with_daily_profit(monkeypatch):
     assert row["name"] == "ETF A"
     assert row["signal"] == "BUY"
     assert row["signal_name"] == "买入"
-    assert row["today_operation"] == "买入2仓"
+    assert row["previous_positions_used"] == 2
+    assert row["today_action_count"] == 3
+    assert row["today_operation"] == "买入3仓"
     assert row["daily_change_pct"] == pytest.approx(5.0)
     assert row["daily_profit"] == pytest.approx(3 * 200 * 5.0 / 100)
     assert row["monthly_profit"] == 12.5
@@ -135,6 +138,7 @@ def test_build_position_signal_rows_rederives_actual_position_fields_from_cached
             "signal_strength": 8,
             "macd_dif": 0.1,
             "macd_dea": 0.05,
+            "previous_positions_used": 2,
             "kdj_k": 50,
         },
     }
@@ -162,9 +166,9 @@ def test_build_position_signal_rows_rederives_actual_position_fields_from_cached
 
     row = result["data"][0]
     assert row["db_position"] == 4
-    assert row["previous_positions_used"] == 4
-    assert row["today_action_count"] == 1
-    assert row["today_operation"] == "买入1仓"
+    assert row["previous_positions_used"] == 2
+    assert row["today_action_count"] == 3
+    assert row["today_operation"] == "买入3仓"
     assert row["daily_profit"] == pytest.approx(4 * 200 * 5.0 / 100)
     assert row["monthly_profit"] == 9.0
     assert row["action_reason"] != "old reason"

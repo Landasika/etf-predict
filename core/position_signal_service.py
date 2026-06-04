@@ -118,19 +118,34 @@ def _safe_float(value, default: float = 0.0) -> float:
         return default
 
 
+def _get_strategy_previous_positions(row: dict, default: int = 0) -> int:
+    latest_data = row.get('latest_data') if isinstance(row.get('latest_data'), dict) else {}
+    return _safe_int(
+        latest_data.get(
+            'previous_positions_used',
+            row.get('previous_positions_used', default),
+        ),
+        default,
+    )
+
+
 def _apply_actual_position_fields(row: dict, db_position: dict, data_date: str) -> None:
     actual_positions = _safe_int(db_position.get('current_positions', 0))
     target_positions = _safe_int(row.get('positions_used', 0))
-    today_action = target_positions - actual_positions
+    previous_positions = _get_strategy_previous_positions(row, actual_positions)
+    today_action = target_positions - previous_positions
+    actual_action = target_positions - actual_positions
     daily_change_pct = _safe_float(row.get('daily_change_pct', 0))
     row_date = row.get('data_date') or data_date
 
     row['db_position'] = actual_positions
     row['db_shares'] = db_position.get('total_shares', 0)
     row['db_avg_cost'] = db_position.get('avg_cost', 0)
-    row['previous_positions_used'] = actual_positions
+    row['previous_positions_used'] = previous_positions
     row['today_action_count'] = today_action
     row['today_operation'] = _get_today_operation(today_action)
+    row['actual_action_count'] = actual_action
+    row['actual_operation'] = _get_today_operation(actual_action)
     row['action_reason'] = _get_action_reason(
         today_action,
         row.get('latest_data', {}),
@@ -278,12 +293,16 @@ def build_position_signal_rows(
         backtest_summary = signal_data.get('backtest_summary', {})
 
         daily_change_pct = _calculate_daily_change_pct(etf_code)
-        previous_positions = _get_current_db_positions(etf_code)
-        daily_profit = calculate_daily_profit(previous_positions, daily_change_pct)
+        actual_positions = _get_current_db_positions(etf_code)
+        previous_positions = _safe_int(
+            latest_data.get('previous_positions_used', signal_data.get('previous_positions_used', actual_positions)),
+            actual_positions,
+        )
+        daily_profit = calculate_daily_profit(actual_positions, daily_change_pct)
         monthly_profit = calculate_monthly_profit(
             etf_code,
             signal_data.get('latest_date', data_date),
-            previous_positions,
+            actual_positions,
         )
 
         kdj_k = latest_data.get('kdj_k', 0)
