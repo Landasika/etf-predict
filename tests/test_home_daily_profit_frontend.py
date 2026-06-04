@@ -148,6 +148,23 @@ def test_advice_modal_uses_backend_actual_positions_not_strategy_previous_slots(
     assert "previous_positions_used: etf.latest_data?.previous_positions_used || 0" not in body
 
 
+def test_advice_modal_uses_loaded_strategy_data_not_a_second_batch_request():
+    source = HOME_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "loadAdvice")
+
+    assert "let signals = getValidPositionGridItems(strategyData)" in body
+    assert "fetch('/api/watchlist/batch-signals')" not in body
+
+
+def test_advice_modal_uses_backend_operation_and_actual_holdings():
+    source = HOME_JS.read_text(encoding="utf-8")
+    body = _function_body(source, "loadAdvice")
+
+    assert "etf.today_operation ||" in body
+    assert "const currentPosition = formattedSignals.filter(s => s.db_position > 0)" in body
+    assert "positions_used > 0" not in body
+
+
 def test_position_grid_sort_prioritizes_add_reduce_then_hold():
     source = HOME_JS.read_text(encoding="utf-8")
     body = _function_body(source, "sortPositionGridItems")

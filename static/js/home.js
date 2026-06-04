@@ -1,5 +1,5 @@
 // 首页策略汇总
-console.log('📝 home.js v90 已加载 - 首页持仓格子');
+console.log('📝 home.js v91 已加载 - 首页持仓格子');
 
 // 实时更新控制
 let realtimeEnabled = false;
@@ -1559,34 +1559,34 @@ async function loadAdvice() {
     adviceContent.innerHTML = '<div class="loading">正在分析市场数据...</div>';
 
     try {
-        // 获取批量信号
-        const response = await fetch('/api/watchlist/batch-signals');
-        const result = await response.json();
-
-        if (!result.success || !result.data) {
-            adviceContent.innerHTML = '<div class="error">加载数据失败</div>';
-            return;
+        let signals = getValidPositionGridItems(strategyData);
+        if (signals.length === 0) {
+            const result = await fetchAPI('/api/watchlist/batch-signals');
+            if (!result.success || !result.data) {
+                adviceContent.innerHTML = '<div class="error">加载数据失败</div>';
+                return;
+            }
+            positionSlotValue = getPositionSlotValue(result);
+            strategyData = result.data;
+            signals = getValidPositionGridItems(strategyData);
         }
 
-        const signals = result.data;
-
-        // 转换数据格式
         const formattedSignals = signals.map(etf => ({
             code: etf.code,
             name: etf.name,
             signal: etf.signal,
-            close: etf.price,
-            macd_dif: etf.macd.dif,
-            macd_dea: etf.macd.dea,
-            macd_hist: etf.macd.hist,
-            signal_strength: etf.signal_strength || 0,  // 使用API返回的信号强度
-            positions_used: etf.positions_used,
+            close: Number(etf.price || 0),
+            macd_dif: Number(etf.macd?.dif || 0),
+            macd_dea: Number(etf.macd?.dea || 0),
+            macd_hist: Number(etf.macd?.hist || 0),
+            signal_strength: Number(etf.signal_strength ?? 0),
+            positions_used: Number(etf.positions_used || 0),
             total_positions: etf.total_positions || 10,
             profit_pct: etf.profit_pct,
-            action_reason: etf.action_reason || '',  // 添加操作原因
-            today_action_count: etf.today_action_count || 0,
+            action_reason: etf.action_reason || '',
+            today_action_count: Number(etf.today_action_count || 0),
             today_operation: etf.today_operation || '',
-            db_position: etf.db_position ?? 0,
+            db_position: Number(etf.db_position ?? 0),
             previous_positions_used: etf.previous_positions_used ?? etf.db_position ?? 0
         }));
 
@@ -1614,7 +1614,7 @@ async function loadAdvice() {
                 const positionsBought = Math.abs(etf.today_action_count || 0);
                 const actualReason = etf.action_reason || 'MACD金叉买入';  // 使用实际的操作原因
 
-                let advice = positionsBought > 0 ? ('买入' + positionsBought + '仓') : '持有';
+                let advice = etf.today_operation || (positionsBought > 0 ? ('买入' + positionsBought + '仓') : '持有');
                 let strengthLevel = '';
                 let strengthEmoji = '';
 
@@ -1674,7 +1674,7 @@ async function loadAdvice() {
 
                 let riskLevel = '';
                 let riskEmoji = '';
-                let advice = positionsToClose > 0 ? ('卖出' + positionsToClose + '仓') : '持有';
+                let advice = etf.today_operation || (positionsToClose > 0 ? ('卖出' + positionsToClose + '仓') : '持有');
 
                 if (strength >= -3) {
                     riskLevel = '低风险';
@@ -1685,10 +1685,6 @@ async function loadAdvice() {
                 } else {
                     riskLevel = '高风险';
                     riskEmoji = '⚠️⚠️⚠️';
-                }
-
-                if (positionsToClose > 0 && currentPositions === 0) {
-                    advice = '卖出' + positionsToClose + '仓（清仓）';
                 }
 
                 const macdStatus = dif > 0 && dea > 0 ? '零轴上' : (dif < 0 && dea < 0 ? '零轴下' : '穿越中');
@@ -1767,14 +1763,14 @@ async function loadAdvice() {
             }
 
             // 显示当前持仓信息
-            const currentPosition = holdSignals.filter(s => s.positions_used > 0);
+            const currentPosition = formattedSignals.filter(s => s.db_position > 0);
             if (currentPosition.length > 0) {
                 html += '<div style="margin-top:20px;padding:15px;background:white;border-radius:8px;">';
                 html += '<h5 style="margin:0 0 10px 0;color:#4b5563;">📦 当前持仓</h5>';
                 currentPosition.slice(0, 5).forEach(etf => {
                     html += '<div style="padding:8px 0;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;">';
                     html += '<span>' + etf.code + ' ' + etf.name + '</span>';
-                    html += '<span style="color:#059669;">' + etf.positions_used + '成仓</span>';
+                    html += '<span style="color:#059669;">' + etf.db_position + '仓</span>';
                     html += '</div>';
                 });
                 if (currentPosition.length > 5) {
