@@ -648,7 +648,9 @@ async def get_all_etfs_daily_profit(start_date: Optional[str] = '20260603'):
 
     # 存储所有日期的总资产和仓位数据
     timeline_data = {}
-    total_initial_capital = 0
+
+    # 初始资本 = 所有ETF理论满仓金额（每只 ¥2,000）
+    total_initial_capital = sum([etf.get('initial_capital', 2000) for etf in etfs])
 
     for etf in etfs:
         etf_code = etf['code']
@@ -661,7 +663,6 @@ async def get_all_etfs_daily_profit(start_date: Optional[str] = '20260603'):
             snapshots = _get_position_snapshots_for_profit(etf_code, '99999999')
             # 用 start_date 当天的 snapshot 仓位作为起点（而非当前 DB 仓位）
             start_snapshot_positions = int(snapshots.get(_start_date_clean, 0) or 0)
-            total_initial_capital += start_snapshot_positions * 200
 
             profit_series = _calculate_slot_profit_series(
                 daily_rows=daily_rows,
@@ -706,7 +707,7 @@ async def get_all_etfs_daily_profit(start_date: Optional[str] = '20260603'):
             print(f"Error processing {etf_code}: {e}")
             continue
 
-    # 初始资本已在循环中按 start_date snapshot 仓位累加
+    # 计算总仓位上限
     total_positions_max = sum([etf.get('total_positions', 10) for etf in etfs])
 
     # 转换为列表格式
