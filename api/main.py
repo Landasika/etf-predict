@@ -620,18 +620,22 @@ async def run_backtest_for_watchlist(etf_code: str, start_date: Optional[str] = 
 
 
 @app.get("/api/profit/all-etfs-daily")
-async def get_all_etfs_daily_profit(start_date: Optional[str] = config.DEFAULT_START_DATE):
+async def get_all_etfs_daily_profit(start_date: Optional[str] = '20260603'):
     """获取所有自选ETF的每日汇总收益（用于收益日历和图表）
 
     返回所有ETF每天的总收益/亏损金额、仓位变化、累计收益曲线
+
+    从 2026-06-03（position_snapshots 表创建后）开始有真实仓位数据。
     """
     from core.watchlist import load_watchlist
     from core.database import get_etf_daily_data
-    from core.position_manager import get_position
     from collections import defaultdict
 
     watchlist = load_watchlist()
     etfs = watchlist.get('etfs', [])
+
+    # 规范化 start_date 用于 snapshot 查找
+    _start_date_clean = start_date.replace('-', '') if start_date else '20260603'
 
     # 按日期汇总数据
     daily_data_map = defaultdict(lambda: {
@@ -644,6 +648,7 @@ async def get_all_etfs_daily_profit(start_date: Optional[str] = config.DEFAULT_S
 
     # 存储所有日期的总资产和仓位数据
     timeline_data = {}
+    total_initial_capital = 0
 
     for etf in etfs:
         etf_code = etf['code']
@@ -653,16 +658,15 @@ async def get_all_etfs_daily_profit(start_date: Optional[str] = config.DEFAULT_S
             if not daily_rows:
                 continue
 
-            current_position = 0
-            pos = get_position(etf_code)
-            if pos:
-                current_position = pos.get('current_positions', 0)
-
             snapshots = _get_position_snapshots_for_profit(etf_code, '99999999')
+            # 用 start_date 当天的 snapshot 仓位作为起点（而非当前 DB 仓位）
+            start_snapshot_positions = int(snapshots.get(_start_date_clean, 0) or 0)
+            total_initial_capital += start_snapshot_positions * 200
+
             profit_series = _calculate_slot_profit_series(
                 daily_rows=daily_rows,
                 snapshot_positions=snapshots,
-                fallback_positions=current_position,
+                fallback_positions=start_snapshot_positions,
                 start_date=start_date,
             )
 
@@ -702,8 +706,7 @@ async def get_all_etfs_daily_profit(start_date: Optional[str] = config.DEFAULT_S
             print(f"Error processing {etf_code}: {e}")
             continue
 
-    # 计算总初始资本
-    total_initial_capital = sum([etf.get('initial_capital', 2000) for etf in etfs])
+    # 初始资本已在循环中按 start_date snapshot 仓位累加
     total_positions_max = sum([etf.get('total_positions', 10) for etf in etfs])
 
     # 转换为列表格式
