@@ -170,7 +170,7 @@ async function loadAllEtfsProfitData() {
     }
 
     try {
-        const response = await fetch('/api/profit/all-etfs-daily?start_date=20250101');
+        const response = await fetch('/api/profit/all-etfs-daily');
         const result = await response.json();
 
         if (!result.success) {
@@ -441,7 +441,7 @@ function hideCalendarTooltip() {
 function filterTimelineFrom2025(timeline) {
     return timeline.filter(d => {
         const dateStr = String(d.date);
-        return dateStr >= '20250101';
+        return dateStr >= '20260603';
     });
 }
 
